@@ -165,8 +165,11 @@ button:disabled{opacity:.35;cursor:default}
 .trk{fill:none;stroke:var(--track);stroke-width:12}
 .arc{fill:none;stroke:var(--accent);stroke-width:12;stroke-linecap:round}
 .head{fill:var(--ink)}
-.face .in{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px}
-.time{font-size:clamp(50px,17vw,68px);font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.face .in{position:absolute;inset:0;display:grid;grid-template-rows:minmax(0,1fr) auto minmax(0,1fr);justify-items:center;align-items:center}
+.face .in .tsub{grid-row:1;align-self:end;margin-bottom:6px}
+.face .in .time{grid-row:2}
+.face .in .plus{grid-row:3;align-self:start;margin-top:10px}
+.time{font-size:clamp(40px,13vw,52px);font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
 .tsub{font-size:14px;font-weight:700;min-height:20px;color:var(--muted)}
 .plus{min-height:44px;padding:0 20px;border-radius:99px;background:var(--bg);font-weight:700;font-size:15px}
 .face.up .time{animation:blink 1s ease-in-out infinite}
@@ -190,7 +193,7 @@ button:disabled{opacity:.35;cursor:default}
 @keyframes pulse{50%{transform:scale(1.06)}}
 @keyframes blink{50%{opacity:.4}}
 @media (max-height:720px){
-  .rbody{gap:14px}.face{width:min(60vw,210px)}.time{font-size:clamp(44px,15vw,58px)}.rstep{font-size:24px}
+  .rbody{gap:14px}.face{width:min(60vw,210px)}.time{font-size:clamp(36px,12vw,46px)}.rstep{font-size:24px}
 }
 
 /* ---------- complete ---------- */
