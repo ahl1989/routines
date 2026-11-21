@@ -95,10 +95,14 @@ const routineById = (id) => state.routines.find((r) => r.id === id);
 const total = (r) => r.steps.reduce((a, s) => a + s.secs, 0);
 function doneToday() { const k = dayKey(Date.now()), m = {}; state.log.forEach((l) => { if (dayKey(l.at) === k) m[l.rid] = 1; }); return m; }
 function daysLabel(r) {
-  if (!r.days.length) return "";
-  if (r.days.length === 7) return "Every day";
-  return r.days.slice().sort().map((d) => DAYS[d]).join(" ");
+  const d = r.days.slice().sort().join("");
+  if (!d) return "";
+  if (d === "0123456") return "Every day";
+  if (d === "12345") return "Weekdays";
+  if (d === "06") return "Weekends";
+  return r.days.slice().sort().map((x) => DAYFULL[x].slice(0, 3)).join(", ");
 }
+const metaLine = (r, withDays = true) => [r.steps.length + (r.steps.length === 1 ? " step" : " steps"), total(r) ? fmtDur(total(r)) : "", withDays ? daysLabel(r) : ""].filter(Boolean).join(", ");
 function relDay(ts) {
   const n = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / 864e5);
   return n <= 0 ? "Today" : n === 1 ? "Yesterday" : n + " days ago";
@@ -160,9 +164,9 @@ function syncThemeColor() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;
   const running = (view === "run" || view === "done") && run;
-  document.documentElement.style.backgroundColor = running ? (COLORS[run.color] || COLORS.teal) : "";
-  document.body.style.backgroundColor = running ? (COLORS[run.color] || COLORS.teal) : "";
-  meta.setAttribute("content", running ? (COLORS[run.color] || COLORS.teal) : getComputedStyle(document.body).backgroundColor);
+  document.documentElement.style.backgroundColor = running ? "var(--surface)" : "";
+  document.body.style.backgroundColor = running ? "var(--surface)" : "";
+  meta.setAttribute("content", getComputedStyle(document.body).backgroundColor);
 }
 
 /* ================= views ================= */
@@ -181,7 +185,7 @@ function heroHtml(r) {
   const tot = total(r);
   return `<section class="hero" style="${rc(r.color)}"><span class="tag">${sched ? "Scheduled today" : "Up next"}</span>
     <h2>${esc(r.name)}</h2>
-    <p class="meta">${r.steps.length} step${r.steps.length === 1 ? "" : "s"}${tot ? " · " + fmtDur(tot) : ""}</p>
+    <p class="meta">${esc(metaLine(r, false))}</p>
     <div class="peek">${r.steps.slice(0, 3).map((s) => `<span>${esc(s.name)}</span>`).join("")}${r.steps.length > 3 ? `<span>+${r.steps.length - 3}</span>` : ""}</div>
     <div class="acts"><button class="go" data-a="start" data-id="${esc(r.id)}">${ic("play")}Start</button><button class="more" data-a="open" data-id="${esc(r.id)}">Details</button></div></section>`;
 }
@@ -195,7 +199,7 @@ function rowHtml(r, dt) {
   const tot = total(r), dl = daysLabel(r), done = dt[r.id];
   return `<div class="row" style="${rc(r.color)}"><span class="bar"></span>
     <button class="main" data-a="open" data-id="${esc(r.id)}"><span class="txt"><b>${esc(r.name)}</b>
-    <small>${r.steps.length} step${r.steps.length === 1 ? "" : "s"}${tot ? " · " + fmtDur(tot) : ""}${dl ? " · " + esc(dl) : ""}</small></span></button>
+    <small>${esc(metaLine(r))}</small></span></button>
     <button class="play${done ? " done" : ""}" data-a="start" data-id="${esc(r.id)}" aria-label="Start ${esc(r.name)}">${ic(done ? "check" : "play")}</button></div>`;
 }
 function homeHtml() {
@@ -215,7 +219,7 @@ function homeHtml() {
   let note = "";
   if (!isStandalone() && !state.settings.hideInstall) {
     const how = deferredPrompt ? `<button class="btn primary sm" data-a="install" style="margin-top:8px">Install</button>` : isIOS() ? "In Safari, tap Share, then Add to Home Screen." : "Open the browser menu and choose Install app or Add to Home screen.";
-    note = `<div class="note"><div><b>Use it like a normal app</b><span class="muted">Install Routines for full screen and offline use. </span>${deferredPrompt ? how : `<span class="muted">${how}</span>`}</div><button class="x" data-a="hideInstall" aria-label="Dismiss">${ic("x", "sm")}</button></div>`;
+    note = `<div class="note"><div><b>Add Routines to your home screen</b><span class="muted">It opens full screen and works offline. </span>${deferredPrompt ? how : `<span class="muted">${how}</span>`}</div><button class="x" data-a="hideInstall" aria-label="Dismiss">${ic("x", "sm")}</button></div>`;
   }
   return `<header class="top"><div><p class="eyebrow">${esc(date)}</p><h1 class="title">Today</h1></div>
     <div style="display:flex;gap:8px"><button class="round" data-a="new" aria-label="New routine">${ic("plus")}</button><button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></div></header>
@@ -229,6 +233,7 @@ function homeHtml() {
 function progressHtml() {
   const now = Date.now(), week = state.log.filter((l) => l.at >= now - 7 * 864e5).length;
   const secs = state.log.reduce((a, l) => a + l.secs, 0);
+  const spent = secs >= 3600 ? Math.floor(secs / 3600) + " h " + Math.round((secs % 3600) / 60) + " min" : Math.max(1, Math.round(secs / 60)) + " min";
   const counts = countsByDay();
   const mon = new Date(); mon.setHours(0, 0, 0, 0); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7) - 28);
   const todayStart = startOfDay(now);
@@ -244,9 +249,10 @@ function progressHtml() {
     const f = groups[k][0], label = relDay(f.at) !== "Today" && relDay(f.at) !== "Yesterday" ? new Date(f.at).toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) : relDay(f.at);
     return `<h3 class="day-h">${esc(label)}</h3>` + groups[k].map((l) => `<div class="log" style="${rc(l.color)}"><span class="dot"></span><div class="t"><b>${esc(l.name)}</b><small>${new Date(l.at).toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"})}</small></div><div class="r">${l.done}/${l.total} steps<small>${fmt(l.secs)}</small></div></div>`).join("");
   }).join("");
-  return `<header class="top"><div><p class="eyebrow">Completed runs</p><h1 class="title">Progress</h1></div><button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></header>
-    <main class="pad"><div class="tiles"><div class="tile"><b>${streak()}</b><span>Day streak</span></div><div class="tile"><b>${week}</b><span>Runs, last 7 days</span></div><div class="tile"><b>${state.log.length}</b><span>Runs, all time</span></div><div class="tile"><b>${secs >= 3600 ? (secs / 3600).toFixed(1) + "h" : Math.round(secs / 60) + "m"}</b><span>Time spent</span></div></div>
-    <div class="card"><h2 style="font-size:18px">Last 5 weeks</h2><div class="heat" role="img" aria-label="Calendar of days with completed routines">${heat}</div></div>
+  return `<header class="top"><div><h1 class="title">Progress</h1></div><button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></header>
+    <main class="pad"><div class="card streak-card" style="--rc:${COLORS.clay}"><span class="flame">${ic("flame", "lg")}</span><div><h2>${streak() ? streak() + (streak() === 1 ? " day" : " days") + " in a row" : "No streak yet"}</h2>
+    <p class="muted">${state.log.length ? week + (week === 1 ? " run" : " runs") + " in the last 7 days. " + state.log.length + " in total, " + spent + " spent." : "Finish a routine to start one."}</p></div></div>
+    <div class="card"><h2 style="font-size:18px">Last 5 weeks</h2><div class="heat" style="--heat:${COLORS.clay}" role="img" aria-label="Calendar of days with completed routines">${heat}</div></div>
     ${body || `<p class="empty">Finish a routine and it shows up here.</p>`}</main>`;
 }
 
@@ -283,16 +289,16 @@ function editHtml() {
     </main></div>`;
 }
 
-const RING = 2 * Math.PI * 96;
+const RING = 2 * Math.PI * 102;
 function runHtml() {
   const st = run.steps[run.idx], timed = st.secs > 0, last = run.idx === run.steps.length - 1;
   const ring = timed
-    ? `<div class="ring" id="ring"><svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rbg" cx="110" cy="110" r="96"/><circle id="ringFg" class="rfg" cx="110" cy="110" r="96" stroke-dasharray="${RING}" stroke-dashoffset="0" transform="rotate(-90 110 110)"/></svg><div class="rt"><span id="timeTxt" class="time" role="timer">0:00</span><span id="timeSub" class="tsub"></span></div></div>`
-    : `<div class="ring"><svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rbg" cx="110" cy="110" r="96"/></svg><div class="rt"><svg class="i lg still" style="width:64px;height:64px;stroke-width:2.5" aria-hidden="true"><use href="#i-check"/></svg><span class="tsub">No timer</span></div></div>`;
+    ? `<div class="ring" id="ring"><svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rbg" cx="110" cy="110" r="102"/><circle id="ringFg" class="rfg" cx="110" cy="110" r="102" stroke-dasharray="${RING}" stroke-dashoffset="0" transform="rotate(-90 110 110)"/><circle class="disc" cx="110" cy="110" r="86"/></svg><div class="rt"><span id="timeTxt" class="time" role="timer">0:00</span><span id="timeSub" class="tsub"></span></div></div>`
+    : `<div class="ring"><svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rbg" cx="110" cy="110" r="102"/><circle class="disc" cx="110" cy="110" r="86"/></svg><div class="rt"><svg class="i lg" style="width:64px;height:64px;stroke-width:3" aria-hidden="true"><use href="#i-check"/></svg><span class="tsub">No timer</span></div></div>`;
   return `<div class="run" style="${rc(run.color)}">
     <header class="top"><button class="glass" data-a="endAsk" aria-label="End routine">${ic("x")}</button><span class="rname">${esc(run.name)}</span><span class="cnt">${run.idx + 1}/${run.steps.length}</span></header>
     <div class="segs" aria-hidden="true">${run.steps.map((_, i) => `<i class="${i < run.idx ? "d" : i === run.idx ? "c" : ""}"></i>`).join("")}</div>
-    <main class="rbody"><p class="eyebrow">Step ${run.idx + 1} of ${run.steps.length}</p><h2 class="rstep">${esc(st.name)}</h2>${ring}
+    <main class="rbody"><h2 class="rstep">${esc(st.name)}</h2>${ring}
     <p class="next">${last ? "Last step" : "Next: " + esc(run.steps[run.idx + 1].name)}</p></main>
     <footer class="rctl"><button class="bigdone" id="doneBtn" data-a="done">${ic("check")}${last ? "Finish" : "Done"}</button>
     <div class="tools"><button class="tool" data-a="back"${run.idx === 0 ? " disabled" : ""}><span class="c">${ic("prev", "sm")}</span>Back</button>
@@ -302,8 +308,8 @@ function runHtml() {
 function doneHtml() {
   const c = run.summary, s = streak();
   return `<div class="run" style="${rc(run.color)}"><div class="fin">
-    <svg class="big" viewBox="0 0 100 100" aria-hidden="true"><circle class="ringdone" cx="50" cy="50" r="45"/><circle class="arc" cx="50" cy="50" r="45" transform="rotate(-90 50 50)"/><path class="tick" d="M30 52l14 14 27-30"/></svg>
-    <p class="eyebrow" style="color:rgba(255,255,255,.8)">Complete</p><h1>${esc(c.name)}</h1>
+    <svg class="big" viewBox="0 0 100 100" aria-hidden="true"><circle class="tr" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" transform="rotate(-90 50 50)"/><circle class="disc2" cx="50" cy="50" r="37"/><path class="tick" d="M33 52l12 12 22-25"/></svg>
+    <h1>${esc(c.name)}</h1>
     <div class="fstats"><div><b>${c.done}/${c.total}</b><span>Steps</span></div><div><b>${fmt(c.secs)}</b><span>Time</span></div>${s > 1 ? `<div><b>${s}</b><span>Day streak</span></div>` : ""}</div>
     <button class="bigdone" style="max-width:320px" data-a="finish">Back to routines</button></div></div>`;
 }
@@ -314,8 +320,8 @@ function sheetHtml() {
     const r = routineById(sheet.id); if (!r) return "";
     const runs = state.log.filter((l) => l.rid === r.id), tot = total(r), dl = daysLabel(r);
     return `<div class="scrim" data-a="closeSheet"><div class="panel${fresh}" style="${rc(r.color)}" role="dialog" aria-modal="true" aria-label="${esc(r.name)}"><div class="grab"></div>
-      <div class="sh-head"><span class="colorbar"></span><div class="t"><h2>${esc(r.name)}</h2><p class="muted" style="margin-top:6px">${r.steps.length} step${r.steps.length === 1 ? "" : "s"}${tot ? " · " + fmtDur(tot) : ""}${dl ? " · " + esc(dl) : ""}</p>
-      <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + " · last " + relDay(runs[0].at).toLowerCase() : "Not run yet"}</p></div></div>
+      <div class="sh-head"><span class="colorbar"></span><div class="t"><h2>${esc(r.name)}</h2><p class="muted" style="margin-top:6px">${esc(metaLine(r))}</p>
+      <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + ", last " + relDay(runs[0].at).toLowerCase() : "Not run yet"}</p></div></div>
       <ol class="ol">${r.steps.map((s, i) => `<li><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : ""}</span></li>`).join("")}</ol>
       <button class="btn solid block" style="min-height:56px;font-size:17px" data-a="start" data-id="${esc(r.id)}">${ic("play", "sm")}Start routine</button>
       <button class="btn sec block" data-a="edit" data-id="${esc(r.id)}">${ic("edit", "sm")}Edit</button></div></div>`;
