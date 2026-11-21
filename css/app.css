@@ -1,11 +1,11 @@
-/* Calm: white page, very light gray cards, slate text, one yellow accent.
+/* Calm: white page, very light gray cards, soft grey text, one yellow accent.
    No borders or shadows. Dark circles are the main controls, yellow marks what to do next. */
 @font-face{font-family:"Nunito";src:url("../fonts/nunito.woff2") format("woff2");font-weight:200 1000;font-display:swap}
 
 :root{
-  --bg:#ffffff; --card:#f6f6f8; --card-2:#ececf0; --ink:#2f3140; --muted:#5e6070; --line:#ececf0;
-  --track:#e6e6ec; --accent:#ffd60a; --accent-ink:#2f3140; --ctl:#2f3140; --ctl-ink:#ffffff;
-  --off:#8f91a1; --danger:#b42318; --scrim:rgba(47,49,64,.45);
+  --bg:#ffffff; --card:#f6f6f8; --card-2:#ececf0; --ink:#4a4d5e; --muted:#686b7b; --line:#ececf0;
+  --track:#e6e6ec; --accent:#ffd60a; --accent-ink:#3f4252; --ctl:#656879; --ctl-ink:#ffffff;
+  --off:#8f91a1; --danger:#b42318; --scrim:rgba(74,77,94,.45);
   --font:"Nunito","Varela Round","Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
   --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   color-scheme:light;
