@@ -6,20 +6,21 @@ const KEY = "routines-app-v2";
 const RUNKEY = "routines-run-v2";
 const DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 const DAYFULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const PRESETS = [0,30,60,120,180,300,600,900,1200,1800];
-/* A template step is [name, seconds, note, [checklist items]] */
+const PRESETS = [15,30,60,120,180,300,600,900,1200,1800];
+const MINPRESETS = [5,10,15,30,60,120,180,300,600,900,1200];
+/* A template step is [name, seconds, note, [checklist items], shortest seconds] */
 const TEMPLATES = [
-  {name:"Morning start", days:[1,2,3,4,5], steps:[["Drink a glass of water",0,"Before coffee"],["Stretch",300,"",["Neck","Shoulders","Hamstrings"]],["Plan the day",300]]},
-  {name:"Evening wind-down", days:[], steps:[["Tidy up",300,"",["Dishes","Desk","Laundry"]],["Pack tomorrow's bag",0],["Read",900]]},
-  {name:"Workout", days:[], steps:[["Warm up",300],["Main set",1500],["Cool down",300]]},
-  {name:"Focus block", days:[], steps:[["Clear your desk",120],["Deep work",1500],["Break",300]]}
+  {name:"Morning start", days:[1,2,3,4,5], steps:[["Drink a glass of water",60,"Before coffee",[],5],["Stretch",300,"",["Neck","Shoulders","Hamstrings"],120],["Plan the day",300,"",[],60]]},
+  {name:"Evening wind-down", days:[], steps:[["Tidy up",300,"",["Dishes","Desk","Laundry"],60],["Pack tomorrow's bag",180,"",[],60],["Read",900,"",[],300]]},
+  {name:"Workout", days:[], steps:[["Warm up",300,"",[],120],["Main set",1500,"",[],600],["Cool down",300,"",[],120]]},
+  {name:"Focus block", days:[], steps:[["Clear your desk",120,"",[],30],["Deep work",1500,"",[],900],["Break",300,"",[],60]]}
 ];
 
 /* ================= small helpers ================= */
 const $app = document.getElementById("app");
 const uid = () => Math.random().toString(36).slice(2, 9);
-const mkStep = ([name, secs, note, items]) => ({id: uid(), name, secs, note: note || "", items: (items || []).map((text) => ({id: uid(), text}))});
-const blankStep = () => mkStep(["", 0]);
+const mkStep = ([name, secs, note, items, min]) => ({id: uid(), name, secs, note: note || "", minSecs: min || 0, items: (items || []).map((text) => ({id: uid(), text}))});
+const blankStep = () => mkStep(["", 60]);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ic = (n, c = "") => `<svg class="i ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
@@ -27,11 +28,11 @@ const startOfDay = (ts) => { const d = new Date(ts); return new Date(d.getFullYe
 const fmt = (sec) => { sec = Math.max(0, sec); const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + (s < 10 ? "0" : "") + s; };
 const clock = (ts) => new Date(ts).toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"});
 function fmtDur(sec) {
-  if (!sec) return "No timer";
+  if (!sec) return "0 sec";
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   return [h ? h + " h" : "", m ? m + " min" : "", s ? s + " sec" : ""].filter(Boolean).join(" ");
 }
-const presetLabel = (p) => p === 0 ? "None" : p < 60 ? p + " sec" : (p / 60) + " min";
+const presetLabel = (p) => p < 60 ? p + " sec" : p % 60 ? Math.floor(p / 60) + " min " + (p % 60) + " sec" : (p / 60) + " min";
 const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
@@ -43,6 +44,8 @@ function seed() {
   });
 }
 /* Accepts older backups too (they carried colors, which are no longer used). */
+/* Every step has a time: nothing below 5 seconds, and older untimed steps become 1 minute. */
+const stepSecs = (v) => { v = Math.round(+v || 0); return v <= 0 ? 60 : Math.max(5, v); };
 function normalize(o) {
   if (!o || typeof o !== "object" || !Array.isArray(o.routines)) return null;
   const st = (o.settings || {});
@@ -53,10 +56,12 @@ function normalize(o) {
   o.routines.forEach((r) => {
     if (!r || !Array.isArray(r.steps)) return;
     const steps = r.steps.map((t) => ({
-      id: String(t.id || uid()), name: String(t.name || "").slice(0, 80), secs: Math.max(0, Math.round(+t.secs || 0)),
+      id: String(t.id || uid()), name: String(t.name || "").slice(0, 80), secs: stepSecs(t.secs),
+      minSecs: 0,
       note: String(t.note || "").slice(0, 500),
       items: (Array.isArray(t.items) ? t.items : []).map((x) => ({id: String((x && x.id) || uid()), text: String((x && x.text) || "").slice(0, 80)})).filter((x) => x.text).slice(0, 30)
     })).filter((t) => t.name);
+    steps.forEach((t, i) => { const m = Math.round(+r.steps[i].minSecs || 0); t.minSecs = m > 0 ? Math.min(t.secs, Math.max(5, m)) : 0; });
     s.routines.push({
       id: String(r.id || uid()), name: String(r.name || "Untitled routine").slice(0, 60),
       days: (Array.isArray(r.days) ? r.days : []).filter((d) => d >= 0 && d <= 6), steps
@@ -66,7 +71,25 @@ function normalize(o) {
     if (l && l.at) s.log.push({id: String(l.id || uid()), rid: String(l.rid || ""), name: String(l.name || ""), at: +l.at, secs: +l.secs || 0, done: +l.done || 0, total: +l.total || 0});
   });
   s.log.sort((a, b) => b.at - a.at);
+  s.fit = cleanFit(o.fit);
   return s;
+}
+/* Remembered "fit to time" adjustments: {routineId: {last: minutes, b: {minutes: {at, steps: {stepId: {secs, skip, off:[itemIds]}}}}}} */
+function cleanFit(f) {
+  const out = {};
+  if (!f || typeof f !== "object") return out;
+  Object.keys(f).forEach((rid) => {
+    const e = f[rid]; if (!e || typeof e !== "object" || !e.b || typeof e.b !== "object") return;
+    const b = {};
+    Object.keys(e.b).forEach((k) => {
+      const m = +k, v = e.b[k]; if (!(m > 0) || !v || typeof v.steps !== "object" || !v.steps) return;
+      const steps = {};
+      Object.keys(v.steps).forEach((id) => { const x = v.steps[id] || {}; steps[id] = {secs: Math.max(5, Math.round(+x.secs || 0)), skip: !!x.skip, off: (Array.isArray(x.off) ? x.off : []).map(String)}; });
+      b[m] = {at: +v.at || 0, steps};
+    });
+    if (Object.keys(b).length) out[rid] = {last: +e.last > 0 ? +e.last : 0, b};
+  });
+  return out;
 }
 function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const n = normalize(JSON.parse(raw)); if (n) return n; } } catch (e) {}
@@ -81,7 +104,7 @@ try { if (!localStorage.getItem(KEY)) save(); } catch (e) {}  /* keep the first-
 
 let view = "home", lastView = "", sheet = null, sheetFresh = false, detailId = null;
 let draft = null, run = null, savedRun = null, timer = null, wake = null, audioCtx = null, deferredPrompt = null;
-let pendingFocus = null, confirmKey = null;
+let pendingFocus = null, confirmKey = null, fit = null;
 
 /* ================= selectors ================= */
 const routineById = (id) => state.routines.find((r) => r.id === id);
@@ -185,10 +208,106 @@ function detailHtml() {
   return `<div class="bar"><button class="round" data-a="tab" data-t="home" aria-label="Back to routines">${ic("back")}</button>
     <button class="round" data-a="edit" data-id="${esc(r.id)}" aria-label="Edit routine">${ic("edit", "sm")}</button></div>
     <div class="dhead"><h1>${esc(r.name)}</h1><p class="sub">${esc(metaLine(r))}</p>
+    <button class="fitbtn" data-a="fitOpen" data-id="${esc(r.id)}">${ic("shrink", "sm")}Fit to time</button>
     <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + ", last " + relDay(runs[0].at).toLowerCase() : "Not done yet"}</p></div>
-    <ol class="ol" style="padding-bottom:130px">${r.steps.map((s, i) => `<li><div class="r"><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : "No timer"}</span></div>${subHtml(s)}</li>`).join("")}</ol>
-    <div class="dock"><div class="in"><button class="startbtn" data-a="start" data-id="${esc(r.id)}">${ic("play", "lg")}<span class="t"><b>Start</b><span data-eta="${tot}">${tot ? etaText(tot) : "No timers"}</span></span></button>
+    <ol class="ol" style="padding-bottom:130px">${r.steps.map((s, i) => `<li><div class="r"><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${fmtDur(s.secs)}</span></div>${subHtml(s)}</li>`).join("")}</ol>
+    <div class="dock"><div class="in"><button class="startbtn" data-a="start" data-id="${esc(r.id)}">${ic("play", "lg")}<span class="t"><b>Start</b><span data-eta="${tot}">${etaText(tot)}</span></span></button>
     <button class="circle" data-a="addTo" data-id="${esc(r.id)}" aria-label="Add a step">${ic("plus", "lg")}</button></div></div>`;
+}
+
+
+/* ================= fit to time ================= */
+const gridFor = (base) => base <= 120 ? 5 : base <= 600 ? 15 : 60;
+const floorTo = (x, g) => Math.floor(x / g) * g;
+function itemRatio(s, off) {
+  const n = s.items.length; if (!n) return 1;
+  return (n - s.items.filter((x) => off[x.id]).length) / n;
+}
+/* Build the starting plan for a routine and a time budget (minutes). Uses what you chose last time you had a similar amount of time. */
+function fitPlan(r, Bmin) {
+  const B = Bmin * 60, rec = (state.fit[r.id] || {}).b || {}, keys = Object.keys(rec).map(Number);
+  const key = keys.length ? keys.reduce((a, b) => Math.abs(b - Bmin) < Math.abs(a - Bmin) ? b : a) : null;
+  const mem = key != null ? rec[key].steps : {}, exact = key === Bmin;
+  const plan = r.steps.map((s, i) => {
+    const m = mem[s.id] || {}, off = {};
+    (m.off || []).forEach((id) => { if (s.items.some((x) => x.id === id)) off[id] = true; });
+    return {i, secs: m.secs ? Math.min(s.secs, Math.max(5, m.secs)) : s.secs, skip: !!m.skip, off, open: false};
+  });
+  const live = plan.filter((p) => !p.skip), sum = () => live.reduce((a, p) => a + p.secs, 0);
+  if (sum() > B) {
+    const s0 = live.map((p) => p.secs), fl = live.map((p) => { const s = r.steps[p.i]; return s.minSecs ? Math.min(s.minSecs, p.secs) : p.secs; });
+    const tot = (f) => live.reduce((a, p, k) => a + Math.max(fl[k], f * s0[k]), 0);
+    let f = 0;
+    if (tot(0) <= B) { let lo = 0, hi = 1; for (let n = 0; n < 40; n++) { const mid = (lo + hi) / 2; if (tot(mid) <= B) lo = mid; else hi = mid; } f = lo; }
+    live.forEach((p, k) => { p.secs = Math.max(fl[k], Math.min(s0[k], floorTo(f * s0[k], gridFor(r.steps[p.i].secs)))); });
+  } else if (!exact && sum() < B) {
+    const s0 = live.map((p) => p.secs), cap = live.map((p) => Math.max(p.secs, r.steps[p.i].secs * itemRatio(r.steps[p.i], p.off)));
+    const tot = (g) => live.reduce((a, p, k) => a + Math.min(cap[k], g * s0[k]), 0);
+    let lo = 1, hi = 1000; for (let n = 0; n < 40; n++) { const mid = (lo + hi) / 2; if (tot(mid) <= B) lo = mid; else hi = mid; }
+    live.forEach((p, k) => { p.secs = Math.max(s0[k], Math.min(cap[k], floorTo(lo * s0[k], gridFor(r.steps[p.i].secs)))); });
+  }
+  return plan;
+}
+const fitTotal = () => fit.plan.reduce((a, p) => a + (p.skip ? 0 : p.secs), 0);
+function fitStatus() {
+  const tot = fitTotal(), diff = fit.B * 60 - tot, by = "Done by " + clock(Date.now() + tot * 1000);
+  const rd = (x) => fmtDur(Math.max(5, Math.round(x / 5) * 5));
+  if (diff < 0) return {over: true, line: rd(-diff) + " over", hint: "Skip a step or an item, or shorten a time.", by};
+  return {over: false, line: diff < 30 ? "Fits" : "Fits, " + rd(diff) + " to spare", hint: "", by};
+}
+function fitGoHtml(st) {
+  return `<b>${st.over ? "Start anyway" : "Start"}</b><span>${st.by}</span>`;
+}
+function fitRow(r, p) {
+  const s = r.steps[p.i], g = gridFor(s.secs), n = s.items.length, left = s.items.filter((x) => !p.off[x.id]).length;
+  if (p.skip) return `<li class="frow skipped"><div class="fr1"><span class="nm">${esc(s.name)}</span><button class="fbtn" data-a="fskip" data-i="${p.i}">Add back</button></div></li>`;
+  const max = Math.max(s.secs, g), pct = max > g ? Math.round(100 * (p.secs - g) / (max - g)) : 100;
+  const items = p.open ? `<div class="fitems" role="group" aria-label="Items in ${esc(s.name)}"><p class="muted">Untick what you will skip. Time shrinks to match.</p>${s.items.map((x) => `<button class="ci" data-a="fitem" data-i="${p.i}" data-id="${esc(x.id)}" aria-pressed="${!p.off[x.id]}"><span class="box">${ic("check", "sm")}</span><span class="t">${esc(x.text)}</span></button>`).join("")}</div>` : "";
+  return `<li class="frow"><div class="fr1"><span class="nm">${esc(s.name)}</span><span class="ft" id="fl${p.i}">${fmtDur(p.secs)}</span></div>
+    <input class="rng" id="fs${p.i}" type="range" min="${g}" max="${max}" step="${g}" value="${Math.min(max, Math.max(g, p.secs))}" data-i="${p.i}" aria-label="Time for ${esc(s.name)}" style="--p:${pct}%">
+    <div class="fr3"><span class="fsub">Was ${fmtDur(s.secs)}${s.minSecs ? ", shortest " + fmtDur(s.minSecs) : ""}</span><span class="facts">${n ? `<button class="fbtn" data-a="fopen" data-i="${p.i}" aria-expanded="${p.open}">Items ${left}/${n}</button>` : ""}<button class="fbtn" data-a="fskip" data-i="${p.i}">Skip</button></span></div>${items}</li>`;
+}
+function fitHtml() {
+  const r = routineById(fit.rid); if (!r) { view = "home"; return homeHtml(); }
+  const st = fitStatus(), B = fit.B;
+  return `<div class="bar"><button class="round" data-a="fitBack" aria-label="Back to routine">${ic("back")}</button><h1 class="ftitle">Fit to time</h1><span class="round ghost" aria-hidden="true"></span></div>
+    <div class="dhead" style="padding-bottom:8px"><p class="sub">${esc(r.name)}</p></div>
+    <div class="bud"><p class="lbl" style="margin:0 0 8px 4px">How much time do you have?</p>
+      <div class="bstep"><button class="round" data-a="fbud" data-d="-5" aria-label="5 minutes less">${ic("minus")}</button><p class="bnum"><b id="fitB">${B}</b> min</p><button class="round" data-a="fbud" data-d="5" aria-label="5 minutes more">${ic("plus")}</button></div>
+      <div class="bchips">${[15, 30, 45, 60, 90].map((m) => `<button class="chip" data-a="fbud" data-v="${m}" aria-pressed="${B === m}">${m}</button>`).join("")}</div></div>
+    <ol class="flist">${fit.plan.map((p) => fitRow(r, p)).join("")}</ol>
+    <div class="dock"><div class="in col"><p class="fsum${st.over ? " over" : ""}" id="fitSum" role="status"><b>${st.line}</b> <span>${esc(st.hint)}</span></p>
+      <button class="startbtn" id="fitGo" data-a="fitStart">${ic("play", "lg")}<span class="t">${fitGoHtml(st)}</span></button></div></div>`;
+}
+function fitLive(i) {
+  const r = routineById(fit.rid), p = fit.plan[i], s = r.steps[p.i], g = gridFor(s.secs), max = Math.max(s.secs, g);
+  const l = document.getElementById("fl" + i); if (l) l.textContent = fmtDur(p.secs);
+  const rg = document.getElementById("fs" + i); if (rg) rg.style.setProperty("--p", (max > g ? Math.round(100 * (p.secs - g) / (max - g)) : 100) + "%");
+  fitLiveSummary();
+}
+function fitLiveSummary() {
+  const st = fitStatus(), sum = document.getElementById("fitSum"), go = document.getElementById("fitGo");
+  if (sum) { sum.className = "fsum" + (st.over ? " over" : ""); sum.innerHTML = `<b>${st.line}</b> <span>${esc(st.hint)}</span>`; }
+  if (go) go.querySelector(".t").innerHTML = fitGoHtml(st);
+}
+function fitSetBudget(B) {
+  const r = routineById(fit.rid); fit.B = Math.max(5, Math.min(600, B)); fit.plan = fitPlan(r, fit.B); render();
+}
+function fitStart() {
+  const r = routineById(fit.rid); if (!r) return;
+  const steps = fit.plan.filter((p) => !p.skip).map((p) => {
+    const s = r.steps[p.i];
+    return {id: s.id, name: s.name, secs: Math.max(5, Math.round(p.secs)), minSecs: s.minSecs, note: s.note, items: s.items.filter((x) => !p.off[x.id]).map((x) => ({id: x.id, text: x.text}))};
+  });
+  if (!steps.length) { toast("Add at least one step back first."); return; }
+  const e = state.fit[r.id] = state.fit[r.id] || {last: 0, b: {}};
+  e.last = fit.B;
+  const rec = {at: Date.now(), steps: {}};
+  fit.plan.forEach((p) => { rec.steps[r.steps[p.i].id] = {secs: Math.round(p.secs), skip: p.skip, off: Object.keys(p.off).filter((k) => p.off[k])}; });
+  e.b[fit.B] = rec;
+  Object.keys(e.b).sort((a, b) => e.b[b].at - e.b[a].at).slice(12).forEach((k) => { delete e.b[k]; });
+  save();
+  beginRun({id: r.id, name: r.name, steps});
 }
 
 function progressHtml() {
@@ -224,9 +343,18 @@ function timerPanel(s, i) {
     <div class="custom">Custom <input class="num-in" type="number" inputmode="numeric" min="0" max="999" data-s="${i}" data-k="m" value="${m || ""}" placeholder="0" aria-label="Minutes">min
     <input class="num-in" type="number" inputmode="numeric" min="0" max="59" data-s="${i}" data-k="s" value="${sec || ""}" placeholder="0" aria-label="Seconds">sec</div>`;
 }
+function minPanel(s, i) {
+  const m = Math.floor((s.minSecs || 0) / 60), sec = (s.minSecs || 0) % 60;
+  const opts = MINPRESETS.filter((p) => p < s.secs);
+  return `<p class="muted">The shortest this step can get when you use Fit to time. Leave it off to keep the step at full time.</p>
+    <div class="presets" role="group" aria-label="Shortest time presets"><button data-a="minpreset" data-i="${i}" data-v="0" aria-pressed="${!s.minSecs}">Not set</button>${opts.map((p) => `<button data-a="minpreset" data-i="${i}" data-v="${p}" aria-pressed="${s.minSecs === p}">${presetLabel(p)}</button>`).join("")}</div>
+    <div class="custom">Custom <input class="num-in" type="number" inputmode="numeric" min="0" max="999" data-s="${i}" data-k="mm" value="${m || ""}" placeholder="0" aria-label="Shortest minutes">min
+    <input class="num-in" type="number" inputmode="numeric" min="0" max="59" data-s="${i}" data-k="ms" value="${sec || ""}" placeholder="0" aria-label="Shortest seconds">sec</div>`;
+}
 function stepPanel(s, i) {
   let body;
   if (draft.sec === "timer") body = timerPanel(s, i);
+  else if (draft.sec === "min") body = minPanel(s, i);
   else if (draft.sec === "list") {
     body = `<div class="items">${s.items.map((it, j) => `<div class="irow"><input class="iin" id="it${i}_${j}" data-s="${i}" data-j="${j}" data-k="item" value="${esc(it.text)}" placeholder="Checklist item" maxlength="80" autocomplete="off" aria-label="Item ${j + 1}"><button class="rmi" data-a="rmItem" data-i="${i}" data-j="${j}" aria-label="Remove item ${j + 1}">${ic("x", "sm")}</button></div>`).join("")}</div>
       <button class="addi" data-a="addItem" data-i="${i}">${ic("plus", "sm")}Add item</button>`;
@@ -235,11 +363,11 @@ function stepPanel(s, i) {
 }
 function stepRow(s, i, n) {
   const open = draft.open === i, sec = open ? draft.sec : "", cnt = s.items.length;
-  const pill = (k, icon, label, has) => `<button class="pill${has ? " has" : ""}"${k === "timer" ? ` id="pill${i}"` : ""} data-a="sec" data-i="${i}" data-k="${k}" aria-expanded="${sec === k}">${ic(icon, "sm")}<span>${label}</span></button>`;
+  const pill = (k, icon, label, has) => `<button class="pill${has ? " has" : ""}"${k === "timer" ? ` id="pill${i}"` : k === "min" ? ` id="pillm${i}"` : ""} data-a="sec" data-i="${i}" data-k="${k}" aria-expanded="${sec === k}">${ic(icon, "sm")}<span>${label}</span></button>`;
   return `<li class="step"><div class="r1"><span class="num">${i + 1}</span>
     <input class="sin" id="s${i}" data-s="${i}" data-k="name" value="${esc(s.name)}" placeholder="Name this step" maxlength="80" autocomplete="off" aria-label="Step ${i + 1} name">
     <button class="xbtn" data-a="rm" data-i="${i}" aria-label="Remove step ${i + 1}">${ic("x", "sm")}</button></div>
-    <div class="r2">${pill("timer", "clock", fmtDur(s.secs), false)}${pill("list", "list", cnt ? "Checklist " + cnt : "Checklist", cnt > 0)}${pill("note", "note", "Note", !!s.note.trim())}</div>
+    <div class="r2">${pill("timer", "clock", fmtDur(s.secs), false)}${pill("list", "list", cnt ? "Checklist " + cnt : "Checklist", cnt > 0)}${pill("note", "note", "Note", !!s.note.trim())}${pill("min", "shrink", s.minSecs ? "Shortest " + fmtDur(s.minSecs) : "Shortest", s.minSecs > 0)}</div>
     ${open ? stepPanel(s, i) : ""}</li>`;
 }
 function editHtml() {
@@ -250,7 +378,7 @@ function editHtml() {
     <div><label class="sr" for="rname">Routine name</label><input class="name-in" id="rname" data-f="name" value="${esc(d.name)}" placeholder="Name your routine" maxlength="60" autocomplete="off"></div>
     <p class="lbl">Days<small>Optional. Scheduled routines are listed first on those days.</small></p>
     <div class="days">${DAYS.map((n, i) => `<button class="dchip" data-a="day" data-i="${i}" aria-pressed="${d.days.includes(i)}" aria-label="${DAYFULL[i]}">${n}</button>`).join("")}</div>
-    <p class="lbl">Steps<small>Add a timer, a checklist or a note to each step. Steps without a timer wait for you to tap Done.</small></p>
+    <p class="lbl">Steps<small>Every step has a timer. Add a checklist, a note, or the shortest time it can shrink to.</small></p>
     <ol class="steps">${d.steps.map((s, i) => stepRow(s, i, d.steps.length)).join("")}</ol>
     <button class="add" data-a="addStep">${ic("plus", "sm")}Add step</button>
     ${d.err ? `<p class="err" role="alert">${esc(d.err)}</p>` : ""}
@@ -320,6 +448,7 @@ function render() {
   else if (view === "progress") { html = progressHtml(); nav = true; }
   else if (view === "detail") html = detailHtml();
   else if (view === "edit") html = editHtml();
+  else if (view === "fit") html = fitHtml();
   else if (view === "run") html = runHtml();
   else if (view === "done") html = doneHtml();
   if (nav) html += `<nav class="tabs" aria-label="Main"><div class="in"><button data-a="tab" data-t="home"${view === "home" ? ' aria-current="page"' : ""}>${ic("list")}Routines</button><button data-a="tab" data-t="progress"${view === "progress" ? ' aria-current="page"' : ""}>${ic("chart")}Progress</button></div></nav>`;
@@ -349,7 +478,7 @@ function startStep(i) {
 function persistRun() {
   try {
     if (!run || view === "done") { localStorage.removeItem(RUNKEY); return; }
-    localStorage.setItem(RUNKEY, JSON.stringify({rid: run.rid, order: run.steps.map((x) => x.id), idx: run.idx, res: run.res, startedAt: run.startedAt, checks: run.checks, paused: run.paused, remainMs: run.remainMs, endAt: run.endAt, totalMs: run.totalMs}));
+    localStorage.setItem(RUNKEY, JSON.stringify({rid: run.rid, steps: run.steps.map((x) => ({id: x.id, name: x.name, secs: x.secs, minSecs: x.minSecs || 0, note: x.note || "", items: (x.items || []).map((y) => ({id: y.id, text: y.text}))})), idx: run.idx, res: run.res, startedAt: run.startedAt, checks: run.checks, paused: run.paused, remainMs: run.remainMs, endAt: run.endAt, totalMs: run.totalMs}));
   } catch (e) {}
 }
 function loadSavedRun() {
@@ -372,9 +501,10 @@ function beginRun(r, resume) {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.resume) audioCtx.resume(); } catch (e) {}
   run = {rid: r.id, name: r.name, steps: r.steps.slice(), res: [], checks: {}, startedAt: Date.now(), paused: false, fired: false, remainMs: 0, endAt: 0, totalMs: 0};
   if (resume) {
-    if (Array.isArray(resume.order)) { const by = {}; run.steps.forEach((x) => { by[x.id] = x; }); const ord = resume.order.map((id) => by[id]).filter(Boolean); run.steps.forEach((x) => { if (!ord.includes(x)) ord.push(x); }); if (ord.length) run.steps = ord; }
+    if (Array.isArray(resume.steps) && resume.steps.length) run.steps = resume.steps.filter((x) => x && x.name).map((x) => ({id: String(x.id || uid()), name: String(x.name), secs: stepSecs(x.secs), minSecs: x.minSecs || 0, note: String(x.note || ""), items: Array.isArray(x.items) ? x.items : []}));
+    else if (Array.isArray(resume.order)) { const by = {}; run.steps.forEach((x) => { by[x.id] = x; }); const ord = resume.order.map((id) => by[id]).filter(Boolean); run.steps.forEach((x) => { if (!ord.includes(x)) ord.push(x); }); if (ord.length) run.steps = ord; }
     run.res = resume.res.slice(0, run.steps.length); run.startedAt = resume.startedAt; run.checks = resume.checks || {};
-    const i = Math.min(resume.idx, run.steps.length - 1);
+    const i = Math.max(0, Math.min(resume.idx, run.steps.length - 1));
     if (run.steps[i].secs > 0 && resume.totalMs > 0) { run.idx = i; run.totalMs = resume.totalMs; run.paused = !!resume.paused; run.remainMs = resume.remainMs; run.endAt = resume.endAt; persistRun(); }
     else startStep(i);
   } else startStep(0);
@@ -424,7 +554,7 @@ function finishRun() {
 function openEditor(id, from) {
   const r = id ? routineById(id) : null;
   draft = r
-    ? {id: r.id, isNew: false, from: from || "home", name: r.name, days: r.days.slice(), open: -1, sec: "timer", err: "", steps: r.steps.map((s) => ({id: s.id, name: s.name, secs: s.secs, note: s.note || "", items: (s.items || []).map((x) => ({id: x.id, text: x.text}))}))}
+    ? {id: r.id, isNew: false, from: from || "home", name: r.name, days: r.days.slice(), open: -1, sec: "timer", err: "", steps: r.steps.map((s) => ({id: s.id, name: s.name, secs: s.secs, note: s.note || "", minSecs: s.minSecs || 0, items: (s.items || []).map((x) => ({id: x.id, text: x.text}))}))}
     : {id: uid(), isNew: true, from: "home", name: "", days: [], open: -1, sec: "timer", err: "", steps: [blankStep()]};
   sheet = null; confirmKey = null; view = "edit";
   if (!r) pendingFocus = "rname";
@@ -432,7 +562,7 @@ function openEditor(id, from) {
 }
 function commitDraft() {
   const d = draft;
-  const steps = d.steps.map((s) => ({id: s.id, name: s.name.trim(), secs: Math.max(0, s.secs | 0), note: (s.note || "").trim(), items: s.items.map((x) => ({id: x.id, text: x.text.trim()})).filter((x) => x.text)})).filter((s) => s.name);
+  const steps = d.steps.map((s) => { const secs = stepSecs(s.secs), m = Math.round(+s.minSecs || 0); return {id: s.id, name: s.name.trim(), secs, minSecs: m > 0 ? Math.min(secs, Math.max(5, m)) : 0, note: (s.note || "").trim(), items: s.items.map((x) => ({id: x.id, text: x.text.trim()})).filter((x) => x.text)}; }).filter((s) => s.name);
   if (!steps.length) return null;
   return {id: d.id, name: d.name.trim() || "Untitled routine", days: d.days.slice().sort(), steps};
 }
@@ -465,6 +595,19 @@ function act(a, ds) {
     case "edit": openEditor(ds.id, "detail"); break;
     case "addTo": openEditor(ds.id, "detail"); draft.steps.push(blankStep()); pendingFocus = "s" + (draft.steps.length - 1); render(); break;
     case "open": openDetail(ds.id); break;
+    case "fitOpen": { const r = routineById(ds.id); if (!r) break; const B = (state.fit[r.id] || {}).last || 60; fit = {rid: r.id, B, plan: fitPlan(r, B)}; go("fit"); break; }
+    case "fitBack": openDetail(fit.rid); break;
+    case "fbud": fitSetBudget(ds.d ? fit.B + (+ds.d) : +ds.v); break;
+    case "fskip": fit.plan[i].skip = !fit.plan[i].skip; render(); break;
+    case "fopen": fit.plan[i].open = !fit.plan[i].open; render(); break;
+    case "fitem": {
+      const r = routineById(fit.rid), p = fit.plan[i], st = r.steps[p.i], g = gridFor(st.secs), before = itemRatio(st, p.off);
+      p.off[ds.id] = !p.off[ds.id]; const after = itemRatio(st, p.off);
+      const next = before > 0 ? p.secs * after / before : st.secs * after;
+      p.secs = Math.max(g, Math.min(st.secs, floorTo(next, g)));
+      render(); break;
+    }
+    case "fitStart": fitStart(); break;
     case "start": { const r = routineById(ds.id); if (r && r.steps.length) beginRun(r); break; }
     case "resume": { const r = savedRun && routineById(savedRun.rid); if (r) beginRun(r, savedRun); break; }
     case "discardRun": savedRun = null; persistRunClear(); render(); break;
@@ -502,6 +645,7 @@ function act(a, ds) {
     case "addItem": { const it = draft.steps[i].items; it.push({id: uid(), text: ""}); pendingFocus = "it" + i + "_" + (it.length - 1); render(); break; }
     case "rmItem": draft.steps[i].items.splice(+ds.j, 1); render(); break;
     case "preset": draft.steps[i].secs = +ds.v; render(); break;
+    case "minpreset": draft.steps[i].minSecs = +ds.v; render(); break;
     case "save": {
       const r = commitDraft();
       if (!r) { draft.err = "Add at least one step with a name."; render(); break; }
@@ -513,7 +657,7 @@ function act(a, ds) {
     case "dup": {
       const r = commitDraft(); if (!r) { draft.err = "Add at least one step with a name."; render(); break; }
       upsert(r);
-      state.routines.push({id: uid(), name: r.name + " copy", days: r.days.slice(), steps: r.steps.map((s) => ({id: uid(), name: s.name, secs: s.secs, note: s.note, items: s.items.map((x) => ({id: uid(), text: x.text}))}))});
+      state.routines.push({id: uid(), name: r.name + " copy", days: r.days.slice(), steps: r.steps.map((s) => ({id: uid(), name: s.name, secs: s.secs, minSecs: s.minSecs, note: s.note, items: s.items.map((x) => ({id: uid(), text: x.text}))}))});
       save(); draft = null; go("home"); toast("Routine duplicated"); break;
     }
     case "del":
@@ -548,13 +692,20 @@ $app.addEventListener("click", (e) => {
   act(b.dataset.a, b.dataset);
 });
 $app.addEventListener("input", (e) => {
-  const t = e.target; if (!draft) return;
+  const t = e.target;
+  if (t.classList && t.classList.contains("rng") && fit) { fit.plan[+t.dataset.i].secs = +t.value; fitLive(+t.dataset.i); return; }
+  if (!draft) return;
   if (t.dataset.f === "name") draft.name = t.value;
   else if (t.dataset.s !== undefined) {
     const s = draft.steps[+t.dataset.s], k = t.dataset.k;
     if (k === "name") s.name = t.value;
     else if (k === "note") s.note = t.value;
     else if (k === "item") s.items[+t.dataset.j].text = t.value;
+    else if (k === "mm" || k === "ms") {
+      const cur = s.minSecs || 0, v = Math.max(0, parseInt(t.value, 10) || 0);
+      s.minSecs = k === "mm" ? Math.min(999, v) * 60 + (cur % 60) : Math.floor(cur / 60) * 60 + Math.min(59, v);
+      const pill = document.querySelector("#pillm" + t.dataset.s + " span"); if (pill) pill.textContent = s.minSecs ? "Shortest " + fmtDur(s.minSecs) : "Shortest";
+    }
     else {
       const m = Math.floor(s.secs / 60), sec = s.secs % 60;
       const v = Math.max(0, parseInt(t.value, 10) || 0);
