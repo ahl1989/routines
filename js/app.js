@@ -7,9 +7,10 @@ const RUNKEY = "routines-run-v2";
 const DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 const DAYFULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const PRESETS = [0,30,60,120,180,300,600,900,1200,1800];
+/* A template step is [name, seconds, note, [checklist items]] */
 const TEMPLATES = [
-  {name:"Morning start", days:[1,2,3,4,5], steps:[["Drink a glass of water",0],["Stretch",300],["Plan the day",300]]},
-  {name:"Evening wind-down", days:[], steps:[["Tidy up",300],["Pack tomorrow's bag",0],["Read",900]]},
+  {name:"Morning start", days:[1,2,3,4,5], steps:[["Drink a glass of water",0,"Before coffee"],["Stretch",300,"",["Neck","Shoulders","Hamstrings"]],["Plan the day",300]]},
+  {name:"Evening wind-down", days:[], steps:[["Tidy up",300,"",["Dishes","Desk","Laundry"]],["Pack tomorrow's bag",0],["Read",900]]},
   {name:"Workout", days:[], steps:[["Warm up",300],["Main set",1500],["Cool down",300]]},
   {name:"Focus block", days:[], steps:[["Clear your desk",120],["Deep work",1500],["Break",300]]}
 ];
@@ -17,6 +18,8 @@ const TEMPLATES = [
 /* ================= small helpers ================= */
 const $app = document.getElementById("app");
 const uid = () => Math.random().toString(36).slice(2, 9);
+const mkStep = ([name, secs, note, items]) => ({id: uid(), name, secs, note: note || "", items: (items || []).map((text) => ({id: uid(), text}))});
+const blankStep = () => mkStep(["", 0]);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ic = (n, c = "") => `<svg class="i ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
@@ -36,7 +39,7 @@ const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.
 function seed() {
   return normalize({
     v: 2, updatedAt: 0, log: [],
-    routines: TEMPLATES.slice(0, 2).map((t) => ({id: uid(), name: t.name, days: t.days, steps: t.steps.map(([name, secs]) => ({id: uid(), name, secs}))}))
+    routines: TEMPLATES.slice(0, 2).map((t) => ({id: uid(), name: t.name, days: t.days, steps: t.steps.map(mkStep)}))
   });
 }
 /* Accepts older backups too (they carried colors, which are no longer used). */
@@ -49,7 +52,11 @@ function normalize(o) {
   };
   o.routines.forEach((r) => {
     if (!r || !Array.isArray(r.steps)) return;
-    const steps = r.steps.map((t) => ({id: String(t.id || uid()), name: String(t.name || "").slice(0, 80), secs: Math.max(0, Math.round(+t.secs || 0))})).filter((t) => t.name);
+    const steps = r.steps.map((t) => ({
+      id: String(t.id || uid()), name: String(t.name || "").slice(0, 80), secs: Math.max(0, Math.round(+t.secs || 0)),
+      note: String(t.note || "").slice(0, 500),
+      items: (Array.isArray(t.items) ? t.items : []).map((x) => ({id: String((x && x.id) || uid()), text: String((x && x.text) || "").slice(0, 80)})).filter((x) => x.text).slice(0, 30)
+    })).filter((t) => t.name);
     s.routines.push({
       id: String(r.id || uid()), name: String(r.name || "Untitled routine").slice(0, 60),
       days: (Array.isArray(r.days) ? r.days : []).filter((d) => d >= 0 && d <= 6), steps
@@ -165,6 +172,10 @@ function homeHtml() {
     <div class="fabwrap"><button class="fab" data-a="new" aria-label="New routine">${ic("plus", "lg")}</button></div>`;
 }
 
+function subHtml(s) {
+  if (!s.note && !s.items.length) return "";
+  return `<div class="ssub">${s.note ? `<p class="snote">${esc(s.note)}</p>` : ""}${s.items.map((x) => `<div class="si"><i></i><span>${esc(x.text)}</span></div>`).join("")}</div>`;
+}
 function detailHtml() {
   const r = routineById(detailId);
   if (!r) { view = "home"; return homeHtml(); }
@@ -173,7 +184,7 @@ function detailHtml() {
     <button class="round" data-a="edit" data-id="${esc(r.id)}" aria-label="Edit routine">${ic("edit", "sm")}</button></div>
     <div class="dhead"><h1>${esc(r.name)}</h1><p class="sub">${esc(metaLine(r))}</p>
     <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + ", last " + relDay(runs[0].at).toLowerCase() : "Not done yet"}</p></div>
-    <ol class="ol" style="padding-bottom:130px">${r.steps.map((s, i) => `<li><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : "No timer"}</span></li>`).join("")}</ol>
+    <ol class="ol" style="padding-bottom:130px">${r.steps.map((s, i) => `<li><div class="r"><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : "No timer"}</span></div>${subHtml(s)}</li>`).join("")}</ol>
     <div class="dock"><div class="in"><button class="startbtn" data-a="start" data-id="${esc(r.id)}">${ic("play", "lg")}<span class="t"><b>Start</b><span>${tot ? "About " + fmtDur(tot) : "No timers"}</span></span></button>
     <button class="circle" data-a="addTo" data-id="${esc(r.id)}" aria-label="Add a step">${ic("plus", "lg")}</button></div></div>`;
 }
@@ -207,17 +218,27 @@ function progressHtml() {
 
 function timerPanel(s, i) {
   const m = Math.floor(s.secs / 60), sec = s.secs % 60;
-  return `<div class="tpanel"><div class="presets" role="group" aria-label="Timer presets">${PRESETS.map((p) => `<button data-a="preset" data-i="${i}" data-v="${p}" aria-pressed="${s.secs === p}">${presetLabel(p)}</button>`).join("")}</div>
+  return `<div class="presets" role="group" aria-label="Timer presets">${PRESETS.map((p) => `<button data-a="preset" data-i="${i}" data-v="${p}" aria-pressed="${s.secs === p}">${presetLabel(p)}</button>`).join("")}</div>
     <div class="custom">Custom <input class="num-in" type="number" inputmode="numeric" min="0" max="999" data-s="${i}" data-k="m" value="${m || ""}" placeholder="0" aria-label="Minutes">min
-    <input class="num-in" type="number" inputmode="numeric" min="0" max="59" data-s="${i}" data-k="s" value="${sec || ""}" placeholder="0" aria-label="Seconds">sec</div></div>`;
+    <input class="num-in" type="number" inputmode="numeric" min="0" max="59" data-s="${i}" data-k="s" value="${sec || ""}" placeholder="0" aria-label="Seconds">sec</div>`;
+}
+function stepPanel(s, i) {
+  let body;
+  if (draft.sec === "timer") body = timerPanel(s, i);
+  else if (draft.sec === "list") {
+    body = `<div class="items">${s.items.map((it, j) => `<div class="irow"><input class="iin" id="it${i}_${j}" data-s="${i}" data-j="${j}" data-k="item" value="${esc(it.text)}" placeholder="Checklist item" maxlength="80" autocomplete="off" aria-label="Item ${j + 1}"><button class="rmi" data-a="rmItem" data-i="${i}" data-j="${j}" aria-label="Remove item ${j + 1}">${ic("x", "sm")}</button></div>`).join("")}</div>
+      <button class="addi" data-a="addItem" data-i="${i}">${ic("plus", "sm")}Add item</button>`;
+  } else body = `<textarea class="nin" id="nt${i}" data-s="${i}" data-k="note" rows="3" maxlength="500" placeholder="Add a note to show while this step runs" aria-label="Note">${esc(s.note)}</textarea>`;
+  return `<div class="tpanel">${body}<div class="mv"><button class="mvb" data-a="up" data-i="${i}"${i === 0 ? " disabled" : ""}>${ic("up", "sm")}Move up</button><button class="mvb" data-a="down" data-i="${i}"${i === draft.steps.length - 1 ? " disabled" : ""}>${ic("down", "sm")}Move down</button></div></div>`;
 }
 function stepRow(s, i, n) {
-  const open = draft.open === i;
+  const open = draft.open === i, sec = open ? draft.sec : "", cnt = s.items.length;
+  const pill = (k, icon, label, has) => `<button class="pill${has ? " has" : ""}"${k === "timer" ? ` id="pill${i}"` : ""} data-a="sec" data-i="${i}" data-k="${k}" aria-expanded="${sec === k}">${ic(icon, "sm")}<span>${label}</span></button>`;
   return `<li class="step"><div class="r1"><span class="num">${i + 1}</span>
-    <input class="sin" id="s${i}" data-s="${i}" data-k="name" value="${esc(s.name)}" placeholder="Name this step" maxlength="80" autocomplete="off" aria-label="Step ${i + 1} name"></div>
-    <div class="r2"><button class="pill" id="pill${i}" data-a="timer" data-i="${i}" aria-expanded="${open}">${ic("clock", "sm")}<span>${fmtDur(s.secs)}</span></button>
-    <div class="mini"><button data-a="up" data-i="${i}" aria-label="Move step up"${i === 0 ? " disabled" : ""}>${ic("up", "sm")}</button><button data-a="down" data-i="${i}" aria-label="Move step down"${i === n - 1 ? " disabled" : ""}>${ic("down", "sm")}</button><button class="rm" data-a="rm" data-i="${i}" aria-label="Remove step">${ic("x", "sm")}</button></div></div>
-    ${open ? timerPanel(s, i) : ""}</li>`;
+    <input class="sin" id="s${i}" data-s="${i}" data-k="name" value="${esc(s.name)}" placeholder="Name this step" maxlength="80" autocomplete="off" aria-label="Step ${i + 1} name">
+    <button class="xbtn" data-a="rm" data-i="${i}" aria-label="Remove step ${i + 1}">${ic("x", "sm")}</button></div>
+    <div class="r2">${pill("timer", "clock", fmtDur(s.secs), false)}${pill("list", "list", cnt ? "Checklist " + cnt : "Checklist", cnt > 0)}${pill("note", "note", "Note", !!s.note.trim())}</div>
+    ${open ? stepPanel(s, i) : ""}</li>`;
 }
 function editHtml() {
   const d = draft;
@@ -227,7 +248,7 @@ function editHtml() {
     <div><label class="sr" for="rname">Routine name</label><input class="name-in" id="rname" data-f="name" value="${esc(d.name)}" placeholder="Name your routine" maxlength="60" autocomplete="off"></div>
     <p class="lbl">Days<small>Optional. Scheduled routines are listed first on those days.</small></p>
     <div class="days">${DAYS.map((n, i) => `<button class="dchip" data-a="day" data-i="${i}" aria-pressed="${d.days.includes(i)}" aria-label="${DAYFULL[i]}">${n}</button>`).join("")}</div>
-    <p class="lbl">Steps<small>Tap the timer to set a countdown. Steps without a timer wait for you to tap Done.</small></p>
+    <p class="lbl">Steps<small>Add a timer, a checklist or a note to each step. Steps without a timer wait for you to tap Done.</small></p>
     <ol class="steps">${d.steps.map((s, i) => stepRow(s, i, d.steps.length)).join("")}</ol>
     <button class="add" data-a="addStep">${ic("plus", "sm")}Add step</button>
     ${d.err ? `<p class="err" role="alert">${esc(d.err)}</p>` : ""}
@@ -238,15 +259,18 @@ function editHtml() {
 const RING = 2 * Math.PI * 138;
 function runHtml() {
   const st = run.steps[run.idx], timed = st.secs > 0, last = run.idx === run.steps.length - 1;
+  const items = st.items || [], ck = run.checks[st.id] || {}, hasList = items.length > 0, allOn = hasList && items.every((x) => ck[x.id]);
+  const chk = hasList ? `<div class="chk" role="group" aria-label="Checklist">${items.map((x) => `<button class="ci" data-a="chk" data-id="${esc(x.id)}" aria-pressed="${!!ck[x.id]}"><span class="box">${ic("check", "sm")}</span><span class="t">${esc(x.text)}</span></button>`).join("")}</div>` : "";
+  const note = st.note ? `<p class="rnote">${esc(st.note)}</p>` : "";
   const face = timed
-    ? `<div class="face" id="ring"><svg class="ring" viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="138"/><circle id="ringFg" class="arc" cx="150" cy="150" r="138" stroke-dasharray="0 ${RING}" transform="rotate(-90 150 150)" style="opacity:0"/><circle id="ringDot" class="head" cx="150" cy="12" r="9"/></svg>
+    ? `<div class="face${hasList ? " sm" : ""}" id="ring"><svg class="ring" viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="138"/><circle id="ringFg" class="arc" cx="150" cy="150" r="138" stroke-dasharray="0 ${RING}" transform="rotate(-90 150 150)" style="opacity:0"/><circle id="ringDot" class="head" cx="150" cy="12" r="9"/></svg>
        <div class="in"><span id="timeTxt" class="time" role="timer">0:00</span><span id="timeSub" class="tsub"></span><button class="plus" data-a="plus">+1 min</button></div></div>`
-    : `<div class="face"><svg class="ring" viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="138"/></svg><div class="notimer">${ic("check")}<span>No timer</span></div></div>`;
+    : hasList ? "" : `<div class="face"><svg class="ring" viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="138"/></svg><div class="notimer">${ic("check")}<span>No timer</span></div></div>`;
   return `<div class="run">
     <header class="rtop"><button class="round" data-a="endAsk" aria-label="End routine">${ic("x")}</button><span class="rname">${esc(run.name)}</span><span class="cnt">${run.idx + 1} of ${run.steps.length}</span></header>
-    <main class="rbody"><h1 class="rstep">${esc(st.name)}</h1>${face}
+    <main class="rbody${hasList ? " hl" : ""}"><h1 class="rstep">${esc(st.name)}</h1>${note}${face}${chk}
     <div class="ctl">${timed ? `<button class="cc" data-a="pause"><span class="c">${ic(run.paused ? "play" : "pause")}</span>${run.paused ? "Resume" : "Pause"}</button>` : `<span class="cc sp"></span>`}
-    <button class="cc big" id="doneBtn" data-a="done"><span class="c">${ic("check")}</span>${last ? "Finish" : "Done"}</button>
+    <button class="cc big${allOn && !timed ? " pulse" : ""}" id="doneBtn" data-a="done"><span class="c">${ic("check")}</span>${last ? "Finish" : "Done"}</button>
     <button class="cc" data-a="skip"><span class="c">${ic("next")}</span>Skip</button></div>
     <p class="next">${last ? "Last step" : "Next: " + esc(run.steps[run.idx + 1].name)}</p></main>
     <footer class="rfoot">${run.idx > 0 ? `<button class="back" data-a="back">Previous step</button>` : ""}<p id="finTxt"></p></footer></div>`;
@@ -323,7 +347,7 @@ function startStep(i) {
 function persistRun() {
   try {
     if (!run || view === "done") { localStorage.removeItem(RUNKEY); return; }
-    localStorage.setItem(RUNKEY, JSON.stringify({rid: run.rid, idx: run.idx, res: run.res, startedAt: run.startedAt, paused: run.paused, remainMs: run.remainMs, endAt: run.endAt, totalMs: run.totalMs}));
+    localStorage.setItem(RUNKEY, JSON.stringify({rid: run.rid, idx: run.idx, res: run.res, startedAt: run.startedAt, checks: run.checks, paused: run.paused, remainMs: run.remainMs, endAt: run.endAt, totalMs: run.totalMs}));
   } catch (e) {}
 }
 function loadSavedRun() {
@@ -344,9 +368,9 @@ function stopRunInfra() {
 }
 function beginRun(r, resume) {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.resume) audioCtx.resume(); } catch (e) {}
-  run = {rid: r.id, name: r.name, steps: r.steps.slice(), res: [], startedAt: Date.now(), paused: false, fired: false, remainMs: 0, endAt: 0, totalMs: 0};
+  run = {rid: r.id, name: r.name, steps: r.steps.slice(), res: [], checks: {}, startedAt: Date.now(), paused: false, fired: false, remainMs: 0, endAt: 0, totalMs: 0};
   if (resume) {
-    run.res = resume.res.slice(0, run.steps.length); run.startedAt = resume.startedAt;
+    run.res = resume.res.slice(0, run.steps.length); run.startedAt = resume.startedAt; run.checks = resume.checks || {};
     const i = Math.min(resume.idx, run.steps.length - 1);
     if (run.steps[i].secs > 0 && resume.totalMs > 0) { run.idx = i; run.totalMs = resume.totalMs; run.paused = !!resume.paused; run.remainMs = resume.remainMs; run.endAt = resume.endAt; persistRun(); }
     else startStep(i);
@@ -397,15 +421,15 @@ function finishRun() {
 function openEditor(id, from) {
   const r = id ? routineById(id) : null;
   draft = r
-    ? {id: r.id, isNew: false, from: from || "home", name: r.name, days: r.days.slice(), open: -1, err: "", steps: r.steps.map((s) => ({id: s.id, name: s.name, secs: s.secs}))}
-    : {id: uid(), isNew: true, from: "home", name: "", days: [], open: -1, err: "", steps: [{id: uid(), name: "", secs: 0}]};
+    ? {id: r.id, isNew: false, from: from || "home", name: r.name, days: r.days.slice(), open: -1, sec: "timer", err: "", steps: r.steps.map((s) => ({id: s.id, name: s.name, secs: s.secs, note: s.note || "", items: (s.items || []).map((x) => ({id: x.id, text: x.text}))}))}
+    : {id: uid(), isNew: true, from: "home", name: "", days: [], open: -1, sec: "timer", err: "", steps: [blankStep()]};
   sheet = null; confirmKey = null; view = "edit";
   if (!r) pendingFocus = "rname";
   render();
 }
 function commitDraft() {
   const d = draft;
-  const steps = d.steps.map((s) => ({id: s.id, name: s.name.trim(), secs: Math.max(0, s.secs | 0)})).filter((s) => s.name);
+  const steps = d.steps.map((s) => ({id: s.id, name: s.name.trim(), secs: Math.max(0, s.secs | 0), note: (s.note || "").trim(), items: s.items.map((x) => ({id: x.id, text: x.text.trim()})).filter((x) => x.text)})).filter((s) => s.name);
   if (!steps.length) return null;
   return {id: d.id, name: d.name.trim() || "Untitled routine", days: d.days.slice().sort(), steps};
 }
@@ -436,7 +460,7 @@ function act(a, ds) {
     case "tab": go(ds.t); break;
     case "new": openEditor(null); break;
     case "edit": openEditor(ds.id, "detail"); break;
-    case "addTo": openEditor(ds.id, "detail"); draft.steps.push({id: uid(), name: "", secs: 0}); pendingFocus = "s" + (draft.steps.length - 1); render(); break;
+    case "addTo": openEditor(ds.id, "detail"); draft.steps.push(blankStep()); pendingFocus = "s" + (draft.steps.length - 1); render(); break;
     case "open": openDetail(ds.id); break;
     case "start": { const r = routineById(ds.id); if (r && r.steps.length) beginRun(r); break; }
     case "resume": { const r = savedRun && routineById(savedRun.rid); if (r) beginRun(r, savedRun); break; }
@@ -465,13 +489,15 @@ function act(a, ds) {
     case "tpl": {
       const t = TEMPLATES[i];
       draft.name = t.name; draft.days = t.days.slice(); draft.open = -1;
-      draft.steps = t.steps.map(([name, secs]) => ({id: uid(), name, secs})); render(); break;
+      draft.steps = t.steps.map(mkStep); render(); break;
     }
-    case "addStep": draft.steps.push({id: uid(), name: "", secs: 0}); draft.open = -1; pendingFocus = "s" + (draft.steps.length - 1); render(); break;
-    case "rm": draft.steps.splice(i, 1); if (!draft.steps.length) draft.steps.push({id: uid(), name: "", secs: 0}); draft.open = -1; render(); break;
-    case "up": if (i > 0) { [draft.steps[i - 1], draft.steps[i]] = [draft.steps[i], draft.steps[i - 1]]; draft.open = -1; } render(); break;
-    case "down": if (i < draft.steps.length - 1) { [draft.steps[i + 1], draft.steps[i]] = [draft.steps[i], draft.steps[i + 1]]; draft.open = -1; } render(); break;
-    case "timer": draft.open = draft.open === i ? -1 : i; render(); break;
+    case "addStep": draft.steps.push(blankStep()); draft.open = -1; pendingFocus = "s" + (draft.steps.length - 1); render(); break;
+    case "rm": draft.steps.splice(i, 1); if (!draft.steps.length) draft.steps.push(blankStep()); draft.open = -1; render(); break;
+    case "up": if (i > 0) { [draft.steps[i - 1], draft.steps[i]] = [draft.steps[i], draft.steps[i - 1]]; if (draft.open === i) draft.open = i - 1; } render(); break;
+    case "down": if (i < draft.steps.length - 1) { [draft.steps[i + 1], draft.steps[i]] = [draft.steps[i], draft.steps[i + 1]]; if (draft.open === i) draft.open = i + 1; } render(); break;
+    case "sec": if (draft.open === i && draft.sec === ds.k) draft.open = -1; else { draft.open = i; draft.sec = ds.k; if (ds.k === "list" && !draft.steps[i].items.length) { draft.steps[i].items.push({id: uid(), text: ""}); pendingFocus = "it" + i + "_0"; } else if (ds.k === "note") pendingFocus = "nt" + i; } render(); break;
+    case "addItem": { const it = draft.steps[i].items; it.push({id: uid(), text: ""}); pendingFocus = "it" + i + "_" + (it.length - 1); render(); break; }
+    case "rmItem": draft.steps[i].items.splice(+ds.j, 1); render(); break;
     case "preset": draft.steps[i].secs = +ds.v; render(); break;
     case "save": {
       const r = commitDraft();
@@ -484,7 +510,7 @@ function act(a, ds) {
     case "dup": {
       const r = commitDraft(); if (!r) { draft.err = "Add at least one step with a name."; render(); break; }
       upsert(r);
-      state.routines.push({id: uid(), name: r.name + " copy", days: r.days.slice(), steps: r.steps.map((s) => ({id: uid(), name: s.name, secs: s.secs}))});
+      state.routines.push({id: uid(), name: r.name + " copy", days: r.days.slice(), steps: r.steps.map((s) => ({id: uid(), name: s.name, secs: s.secs, note: s.note, items: s.items.map((x) => ({id: uid(), text: x.text}))}))});
       save(); draft = null; go("home"); toast("Routine duplicated"); break;
     }
     case "del":
@@ -492,6 +518,7 @@ function act(a, ds) {
       else { confirmKey = "del"; render(); }
       break;
     /* runner */
+    case "chk": { const st = run.steps[run.idx], c = run.checks[st.id] = run.checks[st.id] || {}; c[ds.id] = !c[ds.id]; vib(10); persistRun(); render(); break; }
     case "done": vib(15); advance("done"); break;
     case "skip": advance("skip"); break;
     case "back": if (run.idx > 0) { run.res[run.idx - 1] = undefined; startStep(run.idx - 1); render(); } break;
@@ -522,6 +549,8 @@ $app.addEventListener("input", (e) => {
   else if (t.dataset.s !== undefined) {
     const s = draft.steps[+t.dataset.s], k = t.dataset.k;
     if (k === "name") s.name = t.value;
+    else if (k === "note") s.note = t.value;
+    else if (k === "item") s.items[+t.dataset.j].text = t.value;
     else {
       const m = Math.floor(s.secs / 60), sec = s.secs % 60;
       const v = Math.max(0, parseInt(t.value, 10) || 0);
@@ -534,7 +563,10 @@ $app.addEventListener("keydown", (e) => {
   const t = e.target;
   if (draft && e.key === "Enter" && t.dataset && t.dataset.s !== undefined && t.dataset.k === "name") {
     e.preventDefault(); const i = +t.dataset.s;
-    draft.steps.splice(i + 1, 0, {id: uid(), name: "", secs: 0}); draft.open = -1; pendingFocus = "s" + (i + 1); render();
+    draft.steps.splice(i + 1, 0, blankStep()); draft.open = -1; pendingFocus = "s" + (i + 1); render();
+  } else if (draft && e.key === "Enter" && t.dataset && t.dataset.k === "item") {
+    e.preventDefault(); const i = +t.dataset.s, j = +t.dataset.j;
+    draft.steps[i].items.splice(j + 1, 0, {id: uid(), text: ""}); pendingFocus = "it" + i + "_" + (j + 1); render();
   }
 });
 $app.addEventListener("change", (e) => {
