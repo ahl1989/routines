@@ -8,12 +8,12 @@ const COLORS = {teal:"#0f766e", blue:"#1d4ed8", indigo:"#4f46e5", plum:"#86198f"
 const COLOR_KEYS = Object.keys(COLORS);
 /* Each palette recolors the routine colors, the accent and the text color used on top of them. */
 const PALETTES = {
-  sunny:    {name:"Sunny",    on:"#111111", gp:"86%", gmix:"#ffffff", accent:["#4338ca","#ffd23f"], ink:["#ffffff","#111111"],
+  sunny:    {name:"Sunny",    on:"#111111", gp:"100%", gmix:"#ffffff", accent:["#4338ca","#ffd60a"], ink:["#ffffff","#111111"],
              chrome:{bg:"#fff8dc", s2:"#fbeeb0", line:"#ebdc9a", muted:"#4f4a38", ink:"#14110a"},
-             colors:{teal:"#4fe3c1", blue:"#5cc8ff", indigo:"#b79cff", plum:"#ff8fd0", rose:"#ff7a7a", clay:"#ffc53d", green:"#a3e635", slate:"#ff9f43"}},
-  confetti: {name:"Confetti", on:"#061430", gp:"86%", gmix:"#ffffff", accent:["#9d174d","#ff8ac2"], ink:["#ffffff","#061430"],
+             colors:{teal:"#35f0b0", blue:"#3fc1ff", indigo:"#b388ff", plum:"#ff7eb6", rose:"#ff7a70", clay:"#ffd60a", green:"#b6f23a", slate:"#ff9f1c"}},
+  confetti: {name:"Confetti", on:"#061430", gp:"100%", gmix:"#ffffff", accent:["#9d174d","#ff7eb6"], ink:["#ffffff","#061430"],
              chrome:{bg:"#eaf6ff", s2:"#d4eafb", line:"#bfddf3", muted:"#3e4c66", ink:"#0a1f44"},
-             colors:{teal:"#4fe3d5", blue:"#6ccbff", indigo:"#b794f6", plum:"#ff8ac2", rose:"#ff7f7f", clay:"#ff9f43", green:"#6ee7a0", slate:"#ffd93d"}},
+             colors:{teal:"#2de2e6", blue:"#4cc3ff", indigo:"#b388ff", plum:"#ff7eb6", rose:"#ff7a70", clay:"#ff9f1c", green:"#4be58a", slate:"#ffd60a"}},
   bright:   {name:"Bright",   on:"#111827", gp:"82%", gmix:"#000000", accent:["#111827","#facc15"], ink:["#ffffff","#111111"], colors:{teal:"#2dd4bf", blue:"#60a5fa", indigo:"#a78bfa", plum:"#e879f9", rose:"#fb7185", clay:"#fb923c", green:"#4ade80", slate:"#facc15"}},
   ocean:    {name:"Ocean",    on:"#ffffff", gp:"62%", gmix:"#000000", accent:["#0f766e","#2dd4bf"], ink:["#ffffff","#06201b"], colors:{teal:"#0f766e", blue:"#1d4ed8", indigo:"#4f46e5", plum:"#86198f", rose:"#be123c", clay:"#b45309", green:"#15803d", slate:"#334155"}},
   sunset:   {name:"Sunset",   on:"#ffffff", gp:"60%", gmix:"#000000", accent:["#c2410c","#fb923c"], ink:["#ffffff","#2a1204"], colors:{teal:"#9d174d", blue:"#b91c1c", indigo:"#be123c", plum:"#86198f", rose:"#a16207", clay:"#c2410c", green:"#78350f", slate:"#44403c"}},
@@ -149,7 +149,7 @@ function applyPalette() {
   st.setProperty("--accent", P.accent[d]); st.setProperty("--accent-ink", P.ink[d]);
   const ch = !d && P.chrome;
   [["--bg", "bg"], ["--surface-2", "s2"], ["--line", "line"], ["--muted", "muted"], ["--ink", "ink"]].forEach(([v, k]) => { if (ch) st.setProperty(v, ch[k]); else st.removeProperty(v); });
-  [[10, .1], [14, .14], [16, .16], [18, .18], [22, .22], [25, .25], [50, .5], [65, .65], [80, .8]].forEach(([k, a]) => st.setProperty("--a" + k, rgba(P.on, a)));
+  [[10, .16], [14, .22], [16, .24], [18, .32], [22, .42], [25, .4], [50, .6], [65, .78], [80, .9]].forEach(([k, a]) => st.setProperty("--a" + k, rgba("#ffffff", a)));
 }
 function applyTheme() {
   const t = state.settings.theme, root = document.documentElement;
@@ -159,8 +159,10 @@ function applyTheme() {
 function syncThemeColor() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;
-  if ((view === "run" || view === "done") && run) meta.setAttribute("content", COLORS[run.color] || COLORS.teal);
-  else meta.setAttribute("content", getComputedStyle(document.body).backgroundColor);
+  const running = (view === "run" || view === "done") && run;
+  document.documentElement.style.backgroundColor = running ? (COLORS[run.color] || COLORS.teal) : "";
+  document.body.style.backgroundColor = running ? (COLORS[run.color] || COLORS.teal) : "";
+  meta.setAttribute("content", running ? (COLORS[run.color] || COLORS.teal) : getComputedStyle(document.body).backgroundColor);
 }
 
 /* ================= views ================= */

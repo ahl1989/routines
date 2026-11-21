@@ -186,7 +186,7 @@ button:disabled{opacity:.35;cursor:default}
 .segs i.d{background:var(--on)}
 .segs i.c{background:var(--a65)}
 .rbody{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:18px;padding:16px 24px}
-.rbody .eyebrow{color:var(--a80)}
+.rbody .eyebrow{color:var(--on);opacity:.8}
 .rstep{font-size:clamp(32px,9vw,46px);font-weight:700;overflow-wrap:anywhere;line-height:1.08}
 .ring{position:relative;width:min(68vw,250px);aspect-ratio:1}
 .ring svg{width:100%;height:100%;display:block}
@@ -197,14 +197,14 @@ button:disabled{opacity:.35;cursor:default}
 .tsub{font-size:14px;font-weight:700;opacity:.9;min-height:20px}
 .ring.up .rfg{animation:blink 1s ease-in-out infinite}
 .ring .still{opacity:.9}
-.next{opacity:.85;font-size:15px;overflow-wrap:anywhere;max-width:100%}
+.next{opacity:1;font-weight:600;font-size:16px;overflow-wrap:anywhere;max-width:100%}
 .rctl{padding:0 20px calc(16px + var(--sab));display:flex;flex-direction:column;gap:14px}
 .bigdone{min-height:68px;border-radius:22px;background:var(--on);color:var(--rc);font-family:var(--font-display);font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
 .bigdone.pulse{animation:pulse 1s ease-in-out infinite}
 .tools{display:flex;justify-content:space-around;gap:6px}
 .tool{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:64px;min-height:56px;font-size:12px;font-weight:700;color:var(--on);opacity:.95;justify-content:center}
 .tool span.c{width:44px;height:44px;border-radius:50%;background:var(--a18);display:grid;place-items:center;font-weight:800;font-size:13px}
-.tool:disabled{opacity:.3}
+.tool:disabled{visibility:hidden}
 @keyframes pulse{50%{transform:scale(1.03)}}
 @keyframes blink{50%{opacity:.35}}
 
