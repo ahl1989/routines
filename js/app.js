@@ -172,6 +172,7 @@ function homeHtml() {
     <div class="fabwrap"><button class="fab" data-a="new" aria-label="New routine">${ic("plus", "lg")}</button></div>`;
 }
 
+const etaText = (secs) => "About " + fmtDur(secs) + ", done by " + clock(Date.now() + secs * 1000);
 function subHtml(s) {
   if (!s.note && !s.items.length) return "";
   return `<div class="ssub">${s.note ? `<p class="snote">${esc(s.note)}</p>` : ""}${s.items.map((x) => `<div class="si"><i></i><span>${esc(x.text)}</span></div>`).join("")}</div>`;
@@ -185,7 +186,7 @@ function detailHtml() {
     <div class="dhead"><h1>${esc(r.name)}</h1><p class="sub">${esc(metaLine(r))}</p>
     <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + ", last " + relDay(runs[0].at).toLowerCase() : "Not done yet"}</p></div>
     <ol class="ol" style="padding-bottom:130px">${r.steps.map((s, i) => `<li><div class="r"><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : "No timer"}</span></div>${subHtml(s)}</li>`).join("")}</ol>
-    <div class="dock"><div class="in"><button class="startbtn" data-a="start" data-id="${esc(r.id)}">${ic("play", "lg")}<span class="t"><b>Start</b><span>${tot ? "About " + fmtDur(tot) : "No timers"}</span></span></button>
+    <div class="dock"><div class="in"><button class="startbtn" data-a="start" data-id="${esc(r.id)}">${ic("play", "lg")}<span class="t"><b>Start</b><span data-eta="${tot}">${tot ? etaText(tot) : "No timers"}</span></span></button>
     <button class="circle" data-a="addTo" data-id="${esc(r.id)}" aria-label="Add a step">${ic("plus", "lg")}</button></div></div>`;
 }
 
@@ -575,8 +576,10 @@ $app.addEventListener("change", (e) => {
   rd.onload = () => importText(String(rd.result)); rd.onerror = () => toast("Couldn't read that file."); rd.readAsText(f);
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sheet) closeSheet(); });
+const refreshEta = () => document.querySelectorAll("[data-eta]").forEach((el) => { if (+el.dataset.eta > 0) el.textContent = etaText(+el.dataset.eta); });
+setInterval(refreshEta, 15000);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && run && view === "run") { requestWake(); updateTimer(); }
+  if (document.visibilityState === "visible") { refreshEta(); if (run && view === "run") { requestWake(); updateTimer(); } }
 });
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; if (view === "home" && !sheet) render(); });
 window.addEventListener("appinstalled", () => { deferredPrompt = null; if (!sheet) render(); });
