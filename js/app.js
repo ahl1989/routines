@@ -8,10 +8,15 @@ const COLORS = {teal:"#0f766e", blue:"#1d4ed8", indigo:"#4f46e5", plum:"#86198f"
 const COLOR_KEYS = Object.keys(COLORS);
 /* Each palette recolors the routine colors, the accent and the text color used on top of them. */
 const PALETTES = {
+  sunny:    {name:"Sunny",    on:"#111111", gp:"86%", gmix:"#ffffff", accent:["#4338ca","#ffd23f"], ink:["#ffffff","#111111"],
+             chrome:{bg:"#fff8dc", s2:"#fbeeb0", line:"#ebdc9a", muted:"#4f4a38", ink:"#14110a"},
+             colors:{teal:"#4fe3c1", blue:"#5cc8ff", indigo:"#b79cff", plum:"#ff8fd0", rose:"#ff7a7a", clay:"#ffc53d", green:"#a3e635", slate:"#ff9f43"}},
+  confetti: {name:"Confetti", on:"#061430", gp:"86%", gmix:"#ffffff", accent:["#9d174d","#ff8ac2"], ink:["#ffffff","#061430"],
+             chrome:{bg:"#eaf6ff", s2:"#d4eafb", line:"#bfddf3", muted:"#3e4c66", ink:"#0a1f44"},
+             colors:{teal:"#4fe3d5", blue:"#6ccbff", indigo:"#b794f6", plum:"#ff8ac2", rose:"#ff7f7f", clay:"#ff9f43", green:"#6ee7a0", slate:"#ffd93d"}},
+  bright:   {name:"Bright",   on:"#111827", gp:"82%", gmix:"#000000", accent:["#111827","#facc15"], ink:["#ffffff","#111111"], colors:{teal:"#2dd4bf", blue:"#60a5fa", indigo:"#a78bfa", plum:"#e879f9", rose:"#fb7185", clay:"#fb923c", green:"#4ade80", slate:"#facc15"}},
   ocean:    {name:"Ocean",    on:"#ffffff", gp:"62%", gmix:"#000000", accent:["#0f766e","#2dd4bf"], ink:["#ffffff","#06201b"], colors:{teal:"#0f766e", blue:"#1d4ed8", indigo:"#4f46e5", plum:"#86198f", rose:"#be123c", clay:"#b45309", green:"#15803d", slate:"#334155"}},
   sunset:   {name:"Sunset",   on:"#ffffff", gp:"60%", gmix:"#000000", accent:["#c2410c","#fb923c"], ink:["#ffffff","#2a1204"], colors:{teal:"#9d174d", blue:"#b91c1c", indigo:"#be123c", plum:"#86198f", rose:"#a16207", clay:"#c2410c", green:"#78350f", slate:"#44403c"}},
-  pastel:   {name:"Pastel",   on:"#1f2937", gp:"72%", gmix:"#ffffff", accent:["#3b6fb6","#9ec1f5"], ink:["#ffffff","#0d1b2e"], colors:{teal:"#a8dccd", blue:"#b6d3f2", indigo:"#cdc4f3", plum:"#e9c3ec", rose:"#f6c4d4", clay:"#f8d2b0", green:"#cfe8a9", slate:"#d3d9e2"}},
-  bright:   {name:"Bright",   on:"#111827", gp:"82%", gmix:"#000000", accent:["#111827","#facc15"], ink:["#ffffff","#111111"], colors:{teal:"#2dd4bf", blue:"#60a5fa", indigo:"#a78bfa", plum:"#e879f9", rose:"#fb7185", clay:"#fb923c", green:"#4ade80", slate:"#facc15"}},
   graphite: {name:"Graphite", on:"#ffffff", gp:"60%", gmix:"#000000", accent:["#111827","#e5e7eb"], ink:["#ffffff","#111827"], colors:{teal:"#111827", blue:"#374151", indigo:"#1f2937", plum:"#4b5563", rose:"#27272a", clay:"#3f3f46", green:"#52525b", slate:"#0f172a"}}
 };
 const DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
@@ -54,7 +59,7 @@ function normalize(o) {
   const st = (o.settings || {});
   const s = {
     v: 2, updatedAt: +o.updatedAt || 0, routines: [], log: [],
-    settings: {sound: st.sound !== false, vibrate: st.vibrate !== false, auto: !!st.auto, wake: st.wake !== false, theme: ["light","dark"].includes(st.theme) ? st.theme : "system", hideInstall: !!st.hideInstall, palette: PALETTES[st.palette] ? st.palette : "ocean"}
+    settings: {sound: st.sound !== false, vibrate: st.vibrate !== false, auto: !!st.auto, wake: st.wake !== false, theme: ["light","dark"].includes(st.theme) ? st.theme : "system", hideInstall: !!st.hideInstall, palette: PALETTES[st.palette] ? st.palette : "sunny"}
   };
   o.routines.forEach((r, i) => {
     if (!r || !Array.isArray(r.steps)) return;
@@ -138,10 +143,12 @@ function rgba(hex, a) {
   return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
 }
 function applyPalette() {
-  const P = PALETTES[state.settings.palette] || PALETTES.ocean, st = document.documentElement.style, d = isDark() ? 1 : 0;
+  const P = PALETTES[state.settings.palette] || PALETTES.sunny, st = document.documentElement.style, d = isDark() ? 1 : 0;
   Object.assign(COLORS, P.colors);
   st.setProperty("--on", P.on); st.setProperty("--gp", P.gp); st.setProperty("--gmix", P.gmix);
   st.setProperty("--accent", P.accent[d]); st.setProperty("--accent-ink", P.ink[d]);
+  const ch = !d && P.chrome;
+  [["--bg", "bg"], ["--surface-2", "s2"], ["--line", "line"], ["--muted", "muted"], ["--ink", "ink"]].forEach(([v, k]) => { if (ch) st.setProperty(v, ch[k]); else st.removeProperty(v); });
   [[10, .1], [14, .14], [16, .16], [18, .18], [22, .22], [25, .25], [50, .5], [65, .65], [80, .8]].forEach(([k, a]) => st.setProperty("--a" + k, rgba(P.on, a)));
 }
 function applyTheme() {
