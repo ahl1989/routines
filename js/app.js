@@ -199,7 +199,7 @@ function progressHtml() {
   }).join("");
   const s = streak();
   return `<header class="top"><div><h1 class="title">Progress</h1></div><button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></header>
-    <main class="pad"><div class="panel-c streak-card"><span class="circle yel" style="width:64px;height:64px">${ic("flame", "lg")}</span><div><h2>${s ? s + (s === 1 ? " day" : " days") + " in a row" : "No streak yet"}</h2>
+    <main class="pad"><div class="panel-c streak-card"><span class="circle yel" style="width:52px;height:52px">${ic("flame", "lg")}</span><div><h2>${s ? s + (s === 1 ? " day" : " days") + " in a row" : "No streak yet"}</h2>
     <p class="muted">${state.log.length ? week + (week === 1 ? " run" : " runs") + " in the last 7 days. " + state.log.length + " in total, " + spent + " spent." : "Finish a routine to start one."}</p></div></div>
     <div class="panel-c"><h2>Last 5 weeks</h2><div class="heat" role="img" aria-label="Calendar of days with completed routines">${heat}</div><p class="legend">Darker squares are days with more routines.</p></div>
     ${body || `<p class="empty">Finish a routine and it shows up here.</p>`}</main>`;
@@ -257,7 +257,7 @@ function doneHtml() {
     <svg class="big" viewBox="0 0 100 100" aria-hidden="true"><circle class="disc2" cx="50" cy="50" r="46"/><path class="tick" d="M31 52l13 13 25-27"/></svg>
     <h1>Nicely done</h1><p class="lead">${esc(c.name)}</p>
     <div class="fstats"><div><b>${c.done}/${c.total}</b><span>Steps</span></div><div><b>${fmt(c.secs)}</b><span>Time</span></div>${s > 1 ? `<div><b>${s}</b><span>Day streak</span></div>` : ""}</div>
-    <button class="btn primary block" style="max-width:320px;min-height:64px;font-size:19px" data-a="finish">Back to routines</button></div></div>`;
+    <button class="btn primary block" style="max-width:300px;min-height:54px;font-size:16px" data-a="finish">Back to routines</button></div></div>`;
 }
 
 function sheetHtml() {
