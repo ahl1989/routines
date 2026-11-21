@@ -4,29 +4,14 @@
 /* ================= constants ================= */
 const KEY = "routines-app-v2";
 const RUNKEY = "routines-run-v2";
-const COLORS = {teal:"#0f766e", blue:"#1d4ed8", indigo:"#4f46e5", plum:"#86198f", rose:"#be123c", clay:"#b45309", green:"#15803d", slate:"#334155"};
-const COLOR_KEYS = Object.keys(COLORS);
-/* Each palette recolors the routine colors, the accent and the text color used on top of them. */
-const PALETTES = {
-  sunny:    {name:"Sunny",    on:"#111111", gp:"100%", gmix:"#ffffff", accent:["#4338ca","#ffd60a"], ink:["#ffffff","#111111"],
-             chrome:{bg:"#fff8dc", s2:"#fbeeb0", line:"#ebdc9a", muted:"#4f4a38", ink:"#14110a"},
-             colors:{teal:"#35f0b0", blue:"#3fc1ff", indigo:"#b388ff", plum:"#ff7eb6", rose:"#ff7a70", clay:"#ffd60a", green:"#b6f23a", slate:"#ff9f1c"}},
-  confetti: {name:"Confetti", on:"#061430", gp:"100%", gmix:"#ffffff", accent:["#9d174d","#ff7eb6"], ink:["#ffffff","#061430"],
-             chrome:{bg:"#eaf6ff", s2:"#d4eafb", line:"#bfddf3", muted:"#3e4c66", ink:"#0a1f44"},
-             colors:{teal:"#2de2e6", blue:"#4cc3ff", indigo:"#b388ff", plum:"#ff7eb6", rose:"#ff7a70", clay:"#ff9f1c", green:"#4be58a", slate:"#ffd60a"}},
-  bright:   {name:"Bright",   on:"#111827", gp:"82%", gmix:"#000000", accent:["#111827","#facc15"], ink:["#ffffff","#111111"], colors:{teal:"#2dd4bf", blue:"#60a5fa", indigo:"#a78bfa", plum:"#e879f9", rose:"#fb7185", clay:"#fb923c", green:"#4ade80", slate:"#facc15"}},
-  ocean:    {name:"Ocean",    on:"#ffffff", gp:"62%", gmix:"#000000", accent:["#0f766e","#2dd4bf"], ink:["#ffffff","#06201b"], colors:{teal:"#0f766e", blue:"#1d4ed8", indigo:"#4f46e5", plum:"#86198f", rose:"#be123c", clay:"#b45309", green:"#15803d", slate:"#334155"}},
-  sunset:   {name:"Sunset",   on:"#ffffff", gp:"60%", gmix:"#000000", accent:["#c2410c","#fb923c"], ink:["#ffffff","#2a1204"], colors:{teal:"#9d174d", blue:"#b91c1c", indigo:"#be123c", plum:"#86198f", rose:"#a16207", clay:"#c2410c", green:"#78350f", slate:"#44403c"}},
-  graphite: {name:"Graphite", on:"#ffffff", gp:"60%", gmix:"#000000", accent:["#111827","#e5e7eb"], ink:["#ffffff","#111827"], colors:{teal:"#111827", blue:"#374151", indigo:"#1f2937", plum:"#4b5563", rose:"#27272a", clay:"#3f3f46", green:"#52525b", slate:"#0f172a"}}
-};
 const DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 const DAYFULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const PRESETS = [0,30,60,120,180,300,600,900,1200,1800];
 const TEMPLATES = [
-  {name:"Morning start", color:"clay", days:[1,2,3,4,5], steps:[["Drink a glass of water",0],["Stretch",300],["Plan the day",300]]},
-  {name:"Evening wind-down", color:"indigo", days:[], steps:[["Tidy up",300],["Pack tomorrow's bag",0],["Read",900]]},
-  {name:"Workout", color:"rose", days:[], steps:[["Warm up",300],["Main set",1500],["Cool down",300]]},
-  {name:"Focus block", color:"teal", days:[], steps:[["Clear your desk",120],["Deep work",1500],["Break",300]]}
+  {name:"Morning start", days:[1,2,3,4,5], steps:[["Drink a glass of water",0],["Stretch",300],["Plan the day",300]]},
+  {name:"Evening wind-down", days:[], steps:[["Tidy up",300],["Pack tomorrow's bag",0],["Read",900]]},
+  {name:"Workout", days:[], steps:[["Warm up",300],["Main set",1500],["Cool down",300]]},
+  {name:"Focus block", days:[], steps:[["Clear your desk",120],["Deep work",1500],["Break",300]]}
 ];
 
 /* ================= small helpers ================= */
@@ -34,10 +19,10 @@ const $app = document.getElementById("app");
 const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const ic = (n, c = "") => `<svg class="i ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
-const rc = (c) => `--rc:${COLORS[c] || COLORS.teal}`;
 const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
 const startOfDay = (ts) => { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
 const fmt = (sec) => { sec = Math.max(0, sec); const m = Math.floor(sec / 60), s = sec % 60; return m + ":" + (s < 10 ? "0" : "") + s; };
+const clock = (ts) => new Date(ts).toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"});
 function fmtDur(sec) {
   if (!sec) return "No timer";
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
@@ -51,27 +36,27 @@ const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.
 function seed() {
   return normalize({
     v: 2, updatedAt: 0, log: [],
-    routines: TEMPLATES.slice(0, 2).map((t) => ({id: uid(), name: t.name, color: t.color, days: t.days, steps: t.steps.map(([name, secs]) => ({id: uid(), name, secs}))}))
+    routines: TEMPLATES.slice(0, 2).map((t) => ({id: uid(), name: t.name, days: t.days, steps: t.steps.map(([name, secs]) => ({id: uid(), name, secs}))}))
   });
 }
+/* Accepts older backups too (they carried colors, which are no longer used). */
 function normalize(o) {
   if (!o || typeof o !== "object" || !Array.isArray(o.routines)) return null;
   const st = (o.settings || {});
   const s = {
     v: 2, updatedAt: +o.updatedAt || 0, routines: [], log: [],
-    settings: {sound: st.sound !== false, vibrate: st.vibrate !== false, auto: !!st.auto, wake: st.wake !== false, theme: ["light","dark"].includes(st.theme) ? st.theme : "system", hideInstall: !!st.hideInstall, palette: PALETTES[st.palette] ? st.palette : "sunny"}
+    settings: {sound: st.sound !== false, vibrate: st.vibrate !== false, auto: !!st.auto, wake: st.wake !== false, theme: ["light","dark","system"].includes(st.theme) ? st.theme : "light", hideInstall: !!st.hideInstall}
   };
-  o.routines.forEach((r, i) => {
+  o.routines.forEach((r) => {
     if (!r || !Array.isArray(r.steps)) return;
     const steps = r.steps.map((t) => ({id: String(t.id || uid()), name: String(t.name || "").slice(0, 80), secs: Math.max(0, Math.round(+t.secs || 0))})).filter((t) => t.name);
     s.routines.push({
       id: String(r.id || uid()), name: String(r.name || "Untitled routine").slice(0, 60),
-      color: COLORS[r.color] ? r.color : COLOR_KEYS[i % COLOR_KEYS.length],
       days: (Array.isArray(r.days) ? r.days : []).filter((d) => d >= 0 && d <= 6), steps
     });
   });
   if (Array.isArray(o.log)) o.log.forEach((l) => {
-    if (l && l.at) s.log.push({id: String(l.id || uid()), rid: String(l.rid || ""), name: String(l.name || ""), color: COLORS[l.color] ? l.color : "teal", at: +l.at, secs: +l.secs || 0, done: +l.done || 0, total: +l.total || 0});
+    if (l && l.at) s.log.push({id: String(l.id || uid()), rid: String(l.rid || ""), name: String(l.name || ""), at: +l.at, secs: +l.secs || 0, done: +l.done || 0, total: +l.total || 0});
   });
   s.log.sort((a, b) => b.at - a.at);
   return s;
@@ -86,7 +71,7 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
 }
 
-let view = "home", lastView = "", sheet = null, sheetFresh = false;
+let view = "home", lastView = "", sheet = null, sheetFresh = false, detailId = null;
 let draft = null, run = null, savedRun = null, timer = null, wake = null, audioCtx = null, deferredPrompt = null;
 let pendingFocus = null, confirmKey = null;
 
@@ -97,9 +82,9 @@ function doneToday() { const k = dayKey(Date.now()), m = {}; state.log.forEach((
 function daysLabel(r) {
   const d = r.days.slice().sort().join("");
   if (!d) return "";
-  if (d === "0123456") return "Every day";
-  if (d === "12345") return "Weekdays";
-  if (d === "06") return "Weekends";
+  if (d === "0123456") return "every day";
+  if (d === "12345") return "weekdays";
+  if (d === "06") return "weekends";
   return r.days.slice().sort().map((x) => DAYFULL[x].slice(0, 3)).join(", ");
 }
 const metaLine = (r, withDays = true) => [r.steps.length + (r.steps.length === 1 ? " step" : " steps"), total(r) ? fmtDur(total(r)) : "", withDays ? daysLabel(r) : ""].filter(Boolean).join(", ");
@@ -138,96 +123,59 @@ function beep() {
   }
   vib([220, 110, 220]);
 }
-function isDark() {
-  const t = state.settings.theme;
-  return t === "dark" || (t === "system" && !!window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
-}
-function rgba(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
-}
-function applyPalette() {
-  const P = PALETTES[state.settings.palette] || PALETTES.sunny, st = document.documentElement.style, d = isDark() ? 1 : 0;
-  Object.assign(COLORS, P.colors);
-  st.setProperty("--on", P.on); st.setProperty("--gp", P.gp); st.setProperty("--gmix", P.gmix);
-  st.setProperty("--accent", P.accent[d]); st.setProperty("--accent-ink", P.ink[d]);
-  const ch = !d && P.chrome;
-  [["--bg", "bg"], ["--surface-2", "s2"], ["--line", "line"], ["--muted", "muted"], ["--ink", "ink"]].forEach(([v, k]) => { if (ch) st.setProperty(v, ch[k]); else st.removeProperty(v); });
-  [[10, .16], [14, .22], [16, .24], [18, .32], [22, .42], [25, .4], [50, .6], [65, .78], [80, .9]].forEach(([k, a]) => st.setProperty("--a" + k, rgba("#ffffff", a)));
-}
 function applyTheme() {
-  const t = state.settings.theme, root = document.documentElement;
-  if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
-  applyPalette();
+  document.documentElement.setAttribute("data-theme", state.settings.theme);
+  syncThemeColor();
 }
 function syncThemeColor() {
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (!meta) return;
-  const running = (view === "run" || view === "done") && run;
-  document.documentElement.style.backgroundColor = running ? "var(--surface)" : "";
-  document.body.style.backgroundColor = running ? "var(--surface)" : "";
-  meta.setAttribute("content", getComputedStyle(document.body).backgroundColor);
+  if (meta) meta.setAttribute("content", getComputedStyle(document.body).backgroundColor);
 }
 
 /* ================= views ================= */
-function weekStripHtml() {
-  const counts = countsByDay(), cells = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const on = counts[dayKey(d.getTime())], now = i === 0;
-    cells.push(`<div class="d7${on ? " on" : ""}${now ? " now" : ""}"><span>${DAYS[d.getDay()][0]}</span><i>${on ? ic("check") : ""}</i></div>`);
-  }
-  const s = streak();
-  return `<div class="week" aria-label="Last 7 days"><div class="days7">${cells.join("")}</div>${s ? `<div class="streak" title="Day streak">${ic("flame")}${s}</div>` : ""}</div>`;
-}
-function heroHtml(r) {
-  const sched = r.days.includes(new Date().getDay());
-  const tot = total(r);
-  return `<section class="hero" style="${rc(r.color)}"><span class="tag">${sched ? "Scheduled today" : "Up next"}</span>
-    <h2>${esc(r.name)}</h2>
-    <p class="meta">${esc(metaLine(r, false))}</p>
-    <div class="peek">${r.steps.slice(0, 3).map((s) => `<span>${esc(s.name)}</span>`).join("")}${r.steps.length > 3 ? `<span>+${r.steps.length - 3}</span>` : ""}</div>
-    <div class="acts"><button class="go" data-a="start" data-id="${esc(r.id)}">${ic("play")}Start</button><button class="more" data-a="open" data-id="${esc(r.id)}">Details</button></div></section>`;
+function cardHtml(r, dt) {
+  const done = dt[r.id], tot = total(r);
+  const meta = done ? `${ic("check", "sm")}<span>Done today${tot ? ", " + fmtDur(tot) : ""}</span>` : `<span>${esc(metaLine(r))}</span>`;
+  return `<div class="card"><button class="main" data-a="open" data-id="${esc(r.id)}"><h3>${esc(r.name)}</h3><p class="meta">${meta}</p></button>
+    <button class="circle${done ? " yel" : ""}" data-a="start" data-id="${esc(r.id)}" aria-label="${done ? "Run " + esc(r.name) + " again" : "Start " + esc(r.name)}">${ic(done ? "check" : "play", "lg")}</button></div>`;
 }
 function resumeHtml(r) {
-  const done = savedRun.res.filter(Boolean).length;
-  return `<section class="hero" style="${rc(r.color)}"><span class="tag">In progress</span>
-    <h2>${esc(r.name)}</h2><p class="meta">${done} of ${r.steps.length} steps finished</p>
-    <div class="acts"><button class="go" data-a="resume">${ic("play")}Resume</button><button class="more" data-a="discardRun">Discard</button></div></section>`;
-}
-function rowHtml(r, dt) {
-  const tot = total(r), dl = daysLabel(r), done = dt[r.id];
-  return `<div class="row" style="${rc(r.color)}"><span class="bar"></span>
-    <button class="main" data-a="open" data-id="${esc(r.id)}"><span class="txt"><b>${esc(r.name)}</b>
-    <small>${esc(metaLine(r))}</small></span></button>
-    <button class="play${done ? " done" : ""}" data-a="start" data-id="${esc(r.id)}" aria-label="Start ${esc(r.name)}">${ic(done ? "check" : "play")}</button></div>`;
+  const n = savedRun.res.filter(Boolean).length;
+  return `<div class="card resume"><div class="main"><h3>${esc(r.name)}</h3><p class="meta">In progress, ${n} of ${r.steps.length} done</p><button class="more" data-a="discardRun">Discard</button></div>
+    <button class="circle yel" data-a="resume" aria-label="Resume ${esc(r.name)}">${ic("play", "lg")}</button></div>`;
 }
 function homeHtml() {
   const dt = doneToday(), t = new Date().getDay();
   const rank = (r) => dt[r.id] ? 2 : (r.days.includes(t) ? 0 : 1);
   const list = state.routines.slice().sort((a, b) => rank(a) - rank(b));
-  let hero = "", exclude = null;
   const sr = savedRun && routineById(savedRun.rid);
-  if (sr) { hero = resumeHtml(sr); exclude = sr.id; }
-  else {
-    const next = list.find((r) => !dt[r.id]);
-    if (next) { hero = heroHtml(next); exclude = next.id; }
-    else if (state.routines.length) hero = `<section class="hero rest"><span class="tag">All done</span><h2 style="margin-top:14px">Everything is done for today</h2><p class="meta" style="margin-top:6px;color:var(--muted)">${streak() > 1 ? streak() + " days in a row. Keep it going tomorrow." : "Nice work. Rest up."}</p></section>`;
-  }
-  const rows = list.filter((r) => r.id !== exclude).map((r) => rowHtml(r, dt)).join("");
-  const date = new Date().toLocaleDateString(undefined, {weekday: "long", month: "long", day: "numeric"});
+  const rows = (sr ? resumeHtml(sr) : "") + list.filter((r) => !sr || r.id !== sr.id).map((r) => cardHtml(r, dt)).join("");
+  const now = new Date();
+  const wd = now.toLocaleDateString(undefined, {weekday: "long"}), date = now.toLocaleDateString(undefined, {day: "numeric", month: "long"});
   let note = "";
   if (!isStandalone() && !state.settings.hideInstall) {
     const how = deferredPrompt ? `<button class="btn primary sm" data-a="install" style="margin-top:8px">Install</button>` : isIOS() ? "In Safari, tap Share, then Add to Home Screen." : "Open the browser menu and choose Install app or Add to Home screen.";
     note = `<div class="note"><div><b>Add Routines to your home screen</b><span class="muted">It opens full screen and works offline. </span>${deferredPrompt ? how : `<span class="muted">${how}</span>`}</div><button class="x" data-a="hideInstall" aria-label="Dismiss">${ic("x", "sm")}</button></div>`;
   }
-  return `<header class="top"><div><p class="eyebrow">${esc(date)}</p><h1 class="title">Today</h1></div>
-    <div style="display:flex;gap:8px"><button class="round" data-a="new" aria-label="New routine">${ic("plus")}</button><button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></div></header>
-    ${weekStripHtml()}
-    <main class="pad">${hero}
-    ${rows ? `<div class="sec-h"><h2>${hero ? "Other routines" : "Your routines"}</h2></div><div class="rows">${rows}</div>` : ""}
-    ${!state.routines.length ? `<p class="empty">No routines yet. Start from a template or build your own.</p>` : ""}
-    <button class="add" data-a="new">${ic("plus", "sm")}New routine</button>${note}</main>`;
+  return `<header class="top"><div><h1 class="title">${esc(wd)}</h1><p class="sub">${esc(date)}</p></div>
+    <button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></header>
+    <main class="pad"><h2 class="h2">Routines</h2>
+    ${rows ? `<div class="rows">${rows}</div>` : `<p class="empty">No routines yet. Tap the yellow button to start from a template or build your own.</p>`}
+    ${note}</main>
+    <div class="fabwrap"><button class="fab" data-a="new" aria-label="New routine">${ic("plus", "lg")}</button></div>`;
+}
+
+function detailHtml() {
+  const r = routineById(detailId);
+  if (!r) { view = "home"; return homeHtml(); }
+  const runs = state.log.filter((l) => l.rid === r.id), tot = total(r);
+  return `<div class="bar"><button class="round" data-a="tab" data-t="home" aria-label="Back to routines">${ic("back")}</button>
+    <button class="round" data-a="edit" data-id="${esc(r.id)}" aria-label="Edit routine">${ic("edit", "sm")}</button></div>
+    <div class="dhead"><h1>${esc(r.name)}</h1><p class="sub">${esc(metaLine(r))}</p>
+    <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + ", last " + relDay(runs[0].at).toLowerCase() : "Not done yet"}</p></div>
+    <ol class="ol" style="padding-bottom:130px">${r.steps.map((s, i) => `<li><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : "No timer"}</span></li>`).join("")}</ol>
+    <div class="dock"><div class="in"><button class="startbtn" data-a="start" data-id="${esc(r.id)}">${ic("play", "lg")}<span class="t"><b>Start</b><span>${tot ? "About " + fmtDur(tot) : "No timers"}</span></span></button>
+    <button class="circle" data-a="addTo" data-id="${esc(r.id)}" aria-label="Add a step">${ic("plus", "lg")}</button></div></div>`;
 }
 
 function progressHtml() {
@@ -246,13 +194,14 @@ function progressHtml() {
   const groups = {}, order = [];
   state.log.slice(0, 120).forEach((l) => { const k = dayKey(l.at); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(l); });
   const body = order.map((k) => {
-    const f = groups[k][0], label = relDay(f.at) !== "Today" && relDay(f.at) !== "Yesterday" ? new Date(f.at).toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) : relDay(f.at);
-    return `<h3 class="day-h">${esc(label)}</h3>` + groups[k].map((l) => `<div class="log" style="${rc(l.color)}"><span class="dot"></span><div class="t"><b>${esc(l.name)}</b><small>${new Date(l.at).toLocaleTimeString(undefined, {hour: "numeric", minute: "2-digit"})}</small></div><div class="r">${l.done}/${l.total} steps<small>${fmt(l.secs)}</small></div></div>`).join("");
+    const f = groups[k][0], rel = relDay(f.at), label = rel !== "Today" && rel !== "Yesterday" ? new Date(f.at).toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"}) : rel;
+    return `<h3 class="day-h">${esc(label)}</h3>` + groups[k].map((l) => `<div class="log"><div class="t"><b>${esc(l.name)}</b><small>${clock(l.at)}</small></div><div class="r">${l.done}/${l.total} steps<small>${fmt(l.secs)}</small></div></div>`).join("");
   }).join("");
+  const s = streak();
   return `<header class="top"><div><h1 class="title">Progress</h1></div><button class="round" data-a="settings" aria-label="Settings">${ic("sliders")}</button></header>
-    <main class="pad"><div class="card streak-card" style="--rc:${COLORS.clay}"><span class="flame">${ic("flame", "lg")}</span><div><h2>${streak() ? streak() + (streak() === 1 ? " day" : " days") + " in a row" : "No streak yet"}</h2>
+    <main class="pad"><div class="panel-c streak-card"><span class="circle yel" style="width:64px;height:64px">${ic("flame", "lg")}</span><div><h2>${s ? s + (s === 1 ? " day" : " days") + " in a row" : "No streak yet"}</h2>
     <p class="muted">${state.log.length ? week + (week === 1 ? " run" : " runs") + " in the last 7 days. " + state.log.length + " in total, " + spent + " spent." : "Finish a routine to start one."}</p></div></div>
-    <div class="card"><h2 style="font-size:18px">Last 5 weeks</h2><div class="heat" style="--heat:${COLORS.clay}" role="img" aria-label="Calendar of days with completed routines">${heat}</div></div>
+    <div class="panel-c"><h2>Last 5 weeks</h2><div class="heat" role="img" aria-label="Calendar of days with completed routines">${heat}</div><p class="legend">Darker squares are days with more routines.</p></div>
     ${body || `<p class="empty">Finish a routine and it shows up here.</p>`}</main>`;
 }
 
@@ -272,91 +221,78 @@ function stepRow(s, i, n) {
 }
 function editHtml() {
   const d = draft;
-  return `<div style="${rc(d.color)};display:flex;flex-direction:column;flex:1">
-    <div class="ed-top"><button class="round" data-a="cancel" aria-label="Close without saving">${ic("x")}</button><h1>${d.isNew ? "New routine" : "Edit routine"}</h1><button class="btn solid sm" data-a="save">Save</button></div>
+  return `<div class="ed-top"><button class="round" data-a="cancel" aria-label="Close without saving">${ic("x")}</button><h1>${d.isNew ? "New routine" : "Edit routine"}</h1><button class="btn primary sm" data-a="save">Save</button></div>
     <main class="pad">
-    ${d.isNew ? `<div><p class="lbl">Start from a template</p><div class="hscroll" style="margin-top:8px">${TEMPLATES.map((t, i) => `<button class="tchip" data-a="tpl" data-i="${i}">${esc(t.name)}</button>`).join("")}</div></div>` : ""}
+    ${d.isNew ? `<div><p class="lbl" style="margin-top:4px">Start from a template</p><div class="hscroll" style="margin-top:10px">${TEMPLATES.map((t, i) => `<button class="chip" data-a="tpl" data-i="${i}">${esc(t.name)}</button>`).join("")}</div></div>` : ""}
     <div><label class="sr" for="rname">Routine name</label><input class="name-in" id="rname" data-f="name" value="${esc(d.name)}" placeholder="Name your routine" maxlength="60" autocomplete="off"></div>
-    <p class="lbl">Color</p>
-    <div class="swatches" role="radiogroup" aria-label="Color">${COLOR_KEYS.map((k, n) => `<button class="sw-c" style="--c:${COLORS[k]}" role="radio" aria-checked="${d.color === k}" aria-label="Color ${n + 1}" data-a="color" data-k="${k}">${ic("check", "sm")}</button>`).join("")}</div>
-    <p class="lbl">Days<small>Optional. Scheduled routines are suggested first on those days.</small></p>
+    <p class="lbl">Days<small>Optional. Scheduled routines are listed first on those days.</small></p>
     <div class="days">${DAYS.map((n, i) => `<button class="dchip" data-a="day" data-i="${i}" aria-pressed="${d.days.includes(i)}" aria-label="${DAYFULL[i]}">${n}</button>`).join("")}</div>
     <p class="lbl">Steps<small>Tap the timer to set a countdown. Steps without a timer wait for you to tap Done.</small></p>
     <ol class="steps">${d.steps.map((s, i) => stepRow(s, i, d.steps.length)).join("")}</ol>
     <button class="add" data-a="addStep">${ic("plus", "sm")}Add step</button>
     ${d.err ? `<p class="err" role="alert">${esc(d.err)}</p>` : ""}
-    ${d.isNew ? "" : `<div class="dz"><button class="btn sec" data-a="dup">${ic("copy", "sm")}Duplicate</button><button class="btn sec danger" data-a="del">${ic("trash", "sm")}${confirmKey === "del" ? "Tap to confirm" : "Delete"}</button></div>`}
-    </main></div>`;
+    ${d.isNew ? "" : `<div class="dz"><button class="btn" data-a="dup">${ic("copy", "sm")}Duplicate</button><button class="btn danger" data-a="del">${ic("trash", "sm")}${confirmKey === "del" ? "Tap to confirm" : "Delete"}</button></div>`}
+    </main>`;
 }
 
-const RING = 2 * Math.PI * 102;
+const RING = 2 * Math.PI * 138;
 function runHtml() {
   const st = run.steps[run.idx], timed = st.secs > 0, last = run.idx === run.steps.length - 1;
-  const ring = timed
-    ? `<div class="ring" id="ring"><svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rbg" cx="110" cy="110" r="102"/><circle id="ringFg" class="rfg" cx="110" cy="110" r="102" stroke-dasharray="${RING}" stroke-dashoffset="0" transform="rotate(-90 110 110)"/><circle class="disc" cx="110" cy="110" r="86"/></svg><div class="rt"><span id="timeTxt" class="time" role="timer">0:00</span><span id="timeSub" class="tsub"></span></div></div>`
-    : `<div class="ring"><svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rbg" cx="110" cy="110" r="102"/><circle class="disc" cx="110" cy="110" r="86"/></svg><div class="rt"><svg class="i lg" style="width:64px;height:64px;stroke-width:3" aria-hidden="true"><use href="#i-check"/></svg><span class="tsub">No timer</span></div></div>`;
-  return `<div class="run" style="${rc(run.color)}">
-    <header class="top"><button class="glass" data-a="endAsk" aria-label="End routine">${ic("x")}</button><span class="rname">${esc(run.name)}</span><span class="cnt">${run.idx + 1}/${run.steps.length}</span></header>
-    <div class="segs" aria-hidden="true">${run.steps.map((_, i) => `<i class="${i < run.idx ? "d" : i === run.idx ? "c" : ""}"></i>`).join("")}</div>
-    <main class="rbody"><h2 class="rstep">${esc(st.name)}</h2>${ring}
+  const face = timed
+    ? `<div class="face" id="ring"><svg class="ring" viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="138"/><circle id="ringFg" class="arc" cx="150" cy="150" r="138" stroke-dasharray="0 ${RING}" transform="rotate(-90 150 150)" style="opacity:0"/><circle id="ringDot" class="head" cx="150" cy="12" r="9"/></svg>
+       <div class="in"><span id="timeTxt" class="time" role="timer">0:00</span><span id="timeSub" class="tsub"></span><button class="plus" data-a="plus">+1 min</button></div></div>`
+    : `<div class="face"><svg class="ring" viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="138"/></svg><div class="notimer">${ic("check")}<span>No timer</span></div></div>`;
+  return `<div class="run">
+    <header class="rtop"><button class="round" data-a="endAsk" aria-label="End routine">${ic("x")}</button><span class="rname">${esc(run.name)}</span><span class="cnt">${run.idx + 1} of ${run.steps.length}</span></header>
+    <main class="rbody"><h1 class="rstep">${esc(st.name)}</h1>${face}
+    <div class="ctl">${timed ? `<button class="cc" data-a="pause"><span class="c">${ic(run.paused ? "play" : "pause")}</span>${run.paused ? "Resume" : "Pause"}</button>` : `<span class="cc sp"></span>`}
+    <button class="cc big" id="doneBtn" data-a="done"><span class="c">${ic("check")}</span>${last ? "Finish" : "Done"}</button>
+    <button class="cc" data-a="skip"><span class="c">${ic("next")}</span>Skip</button></div>
     <p class="next">${last ? "Last step" : "Next: " + esc(run.steps[run.idx + 1].name)}</p></main>
-    <footer class="rctl"><button class="bigdone" id="doneBtn" data-a="done">${ic("check")}${last ? "Finish" : "Done"}</button>
-    <div class="tools"><button class="tool" data-a="back"${run.idx === 0 ? " disabled" : ""}><span class="c">${ic("prev", "sm")}</span>Back</button>
-    ${timed ? `<button class="tool" data-a="pause"><span class="c">${ic(run.paused ? "play" : "pause", "sm")}</span>${run.paused ? "Resume" : "Pause"}</button><button class="tool" data-a="plus"><span class="c">+1m</span>Add time</button>` : ""}
-    <button class="tool" data-a="skip"><span class="c">${ic("next", "sm")}</span>Skip</button></div></footer></div>`;
+    <footer class="rfoot">${run.idx > 0 ? `<button class="back" data-a="back">Previous step</button>` : ""}<p id="finTxt"></p></footer></div>`;
 }
 function doneHtml() {
   const c = run.summary, s = streak();
-  return `<div class="run" style="${rc(run.color)}"><div class="fin">
-    <svg class="big" viewBox="0 0 100 100" aria-hidden="true"><circle class="tr" cx="50" cy="50" r="46"/><circle class="arc" cx="50" cy="50" r="46" transform="rotate(-90 50 50)"/><circle class="disc2" cx="50" cy="50" r="37"/><path class="tick" d="M33 52l12 12 22-25"/></svg>
-    <h1>${esc(c.name)}</h1>
+  return `<div class="run"><div class="fin">
+    <svg class="big" viewBox="0 0 100 100" aria-hidden="true"><circle class="disc2" cx="50" cy="50" r="46"/><path class="tick" d="M31 52l13 13 25-27"/></svg>
+    <h1>Nicely done</h1><p class="lead">${esc(c.name)}</p>
     <div class="fstats"><div><b>${c.done}/${c.total}</b><span>Steps</span></div><div><b>${fmt(c.secs)}</b><span>Time</span></div>${s > 1 ? `<div><b>${s}</b><span>Day streak</span></div>` : ""}</div>
-    <button class="bigdone" style="max-width:320px" data-a="finish">Back to routines</button></div></div>`;
+    <button class="btn primary block" style="max-width:320px;min-height:64px;font-size:19px" data-a="finish">Back to routines</button></div></div>`;
 }
 
 function sheetHtml() {
   const fresh = sheetFresh ? " enter" : "";
-  if (sheet.type === "detail") {
-    const r = routineById(sheet.id); if (!r) return "";
-    const runs = state.log.filter((l) => l.rid === r.id), tot = total(r), dl = daysLabel(r);
-    return `<div class="scrim" data-a="closeSheet"><div class="panel${fresh}" style="${rc(r.color)}" role="dialog" aria-modal="true" aria-label="${esc(r.name)}"><div class="grab"></div>
-      <div class="sh-head"><span class="colorbar"></span><div class="t"><h2>${esc(r.name)}</h2><p class="muted" style="margin-top:6px">${esc(metaLine(r))}</p>
-      <p class="muted">${runs.length ? "Done " + runs.length + (runs.length === 1 ? " time" : " times") + ", last " + relDay(runs[0].at).toLowerCase() : "Not run yet"}</p></div></div>
-      <ol class="ol">${r.steps.map((s, i) => `<li><span class="n">${i + 1}</span><span class="nm">${esc(s.name)}</span><span class="du">${s.secs ? fmtDur(s.secs) : ""}</span></li>`).join("")}</ol>
-      <button class="btn solid block" style="min-height:56px;font-size:17px" data-a="start" data-id="${esc(r.id)}">${ic("play", "sm")}Start routine</button>
-      <button class="btn sec block" data-a="edit" data-id="${esc(r.id)}">${ic("edit", "sm")}Edit</button></div></div>`;
-  }
   if (sheet.type === "end") {
     return `<div class="scrim" data-a="closeSheet"><div class="panel${fresh}" role="dialog" aria-modal="true" aria-label="End routine"><div class="grab"></div>
       <h2>End this routine?</h2><p class="muted">Your progress on this run won't be saved.</p>
-      <button class="btn primary block" data-a="closeSheet">Keep going</button><button class="btn sec danger block" data-a="endNow">End without saving</button></div></div>`;
+      <button class="btn primary block" data-a="closeSheet">Keep going</button><button class="btn danger block" data-a="endNow">End without saving</button></div></div>`;
   }
   const S = state.settings;
-  const sw = (k, label, sub) => `<div class="set"><div>${label}<small>${sub}</small></div><button class="switch" role="switch" aria-checked="${S[k]}" aria-label="${label}" data-a="tg" data-k="${k}"></button></div>`;
+  const sw = (k, label, sub) => `<div class="set"><div><b>${label}</b><small>${sub}</small></div><button class="switch" role="switch" aria-checked="${S[k]}" aria-label="${label}" data-a="tg" data-k="${k}"></button></div>`;
+  const themes = [["light", "Light"], ["dark", "Dark"], ["system", "Auto"]];
   return `<div class="scrim" data-a="closeSheet"><div class="panel${fresh}" role="dialog" aria-modal="true" aria-label="Settings"><div class="grab"></div>
     <div class="sh-head"><h2>Settings</h2><button class="round" data-a="closeSheet" aria-label="Close">${ic("x")}</button></div>
-    <p class="lbl">Palette</p>
-    <div class="pals">${Object.entries(PALETTES).map(([k, p]) => `<button class="pal" data-a="palette" data-v="${k}" aria-pressed="${S.palette === k}"><span class="sws">${Object.values(p.colors).slice(0, 6).map((c) => `<i style="background:${c}"></i>`).join("")}</span>${p.name}</button>`).join("")}</div>
-    <p class="lbl">Appearance</p>
-    <div class="seg" role="group" aria-label="Theme">${["system", "light", "dark"].map((t) => `<button data-a="theme" data-v="${t}" aria-pressed="${S.theme === t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join("")}</div>
+    <p class="lbl" style="margin-top:4px">Appearance</p>
+    <div class="seg" role="group" aria-label="Theme">${themes.map(([t, l]) => `<button data-a="theme" data-v="${t}" aria-pressed="${S.theme === t}">${l}</button>`).join("")}</div>
     ${sw("sound", "Sound", "Beep when a timer ends")}${sw("vibrate", "Vibration", "Buzz when a timer ends (Android)")}${sw("auto", "Auto-advance", "Move on when a timer ends")}${sw("wake", "Keep screen on", "While a routine is running")}
-    <p class="lbl" style="margin-top:6px">Your data<small>Routines are stored on this device only. Export a backup now and then, or to move to a new phone.</small></p>
-    <div class="grid2"><button class="btn sec" data-a="export">${ic("download", "sm")}Export</button><label class="btn sec" for="importFile" style="cursor:pointer">${ic("upload", "sm")}Import</label></div>
+    <p class="lbl">Your data<small>Routines are stored on this device only. Export a backup now and then, or to move to a new phone.</small></p>
+    <div class="grid2"><button class="btn" data-a="export">${ic("download", "sm")}Export</button><label class="btn" for="importFile" style="cursor:pointer">${ic("upload", "sm")}Import</label></div>
     <input type="file" id="importFile" accept="application/json,.json" class="sr">
     <details><summary>Copy or paste backup text</summary><div style="display:flex;flex-direction:column;gap:8px;padding-top:6px">
-      <button class="btn sec" data-a="copy">${ic("copy", "sm")}Copy backup text</button>
+      <button class="btn" data-a="copy">${ic("copy", "sm")}Copy backup text</button>
       <textarea class="paste" id="pasteText" placeholder="Paste backup text here" aria-label="Backup text"></textarea>
-      <button class="btn sec" data-a="restore">Restore from text</button></div></details>
+      <button class="btn" data-a="restore">Restore from text</button></div></details>
     ${deferredPrompt && !isStandalone() ? `<button class="btn primary block" data-a="install">Install app</button>` : ""}
-    <button class="btn sec danger block" data-a="clearHistory">${confirmKey === "clear" ? "Tap again to clear history" : "Clear history"}</button>
-    <p class="muted" style="text-align:center">Routines 1.0</p></div></div>`;
+    <button class="btn danger block" data-a="clearHistory">${confirmKey === "clear" ? "Tap again to clear history" : "Clear history"}</button>
+    <p class="muted" style="text-align:center">Routines 1.1</p></div></div>`;
 }
 
 function render() {
   const y = window.scrollY, pn = $app.querySelector(".panel"), py = pn ? pn.scrollTop : 0;
   let html = "", nav = false;
-  if (view === "home") { html = homeHtml(); nav = true; }
+  if (view === "home") { html = homeHtml(); nav = view === "home"; }
   else if (view === "progress") { html = progressHtml(); nav = true; }
+  else if (view === "detail") html = detailHtml();
   else if (view === "edit") html = editHtml();
   else if (view === "run") html = runHtml();
   else if (view === "done") html = doneHtml();
@@ -372,6 +308,7 @@ function render() {
   if (pendingFocus) { const el = document.getElementById(pendingFocus); if (el) el.focus({preventScroll: false}); pendingFocus = null; }
 }
 const go = (v) => { view = v; sheet = null; confirmKey = null; render(); };
+const openDetail = (id) => { detailId = id; go("detail"); };
 const openSheet = (s) => { sheet = s; sheetFresh = true; render(); };
 const closeSheet = () => { sheet = null; confirmKey = null; render(); };
 
@@ -407,7 +344,7 @@ function stopRunInfra() {
 }
 function beginRun(r, resume) {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.resume) audioCtx.resume(); } catch (e) {}
-  run = {rid: r.id, name: r.name, color: r.color, steps: r.steps.slice(), res: [], startedAt: Date.now(), paused: false, fired: false, remainMs: 0, endAt: 0, totalMs: 0};
+  run = {rid: r.id, name: r.name, steps: r.steps.slice(), res: [], startedAt: Date.now(), paused: false, fired: false, remainMs: 0, endAt: 0, totalMs: 0};
   if (resume) {
     run.res = resume.res.slice(0, run.steps.length); run.startedAt = resume.startedAt;
     const i = Math.min(resume.idx, run.steps.length - 1);
@@ -418,12 +355,21 @@ function beginRun(r, resume) {
   requestWake();
   clearInterval(timer); timer = setInterval(updateTimer, 250);
 }
+function finishLine() {
+  let ms = 0;
+  for (let i = run.idx + 1; i < run.steps.length; i++) ms += run.steps[i].secs * 1000;
+  if (run.steps[run.idx].secs > 0) ms += remaining();
+  return ms > 0 ? "Routine finishes around " + clock(Date.now() + ms) : "";
+}
 function updateTimer() {
   if (!run || view !== "run") return;
+  const fin = document.getElementById("finTxt"); if (fin) fin.textContent = finishLine();
   const st = run.steps[run.idx]; if (!(st.secs > 0)) return;
-  const rem = remaining(), txt = document.getElementById("timeTxt"), fg = document.getElementById("ringFg"), sub = document.getElementById("timeSub"), ring = document.getElementById("ring");
+  const rem = remaining(), txt = document.getElementById("timeTxt"), fg = document.getElementById("ringFg"), dot = document.getElementById("ringDot"), sub = document.getElementById("timeSub"), ring = document.getElementById("ring");
+  const frac = Math.min(1, Math.max(0, 1 - rem / run.totalMs));
   if (txt) txt.textContent = fmt(Math.ceil(rem / 1000));
-  if (fg) fg.style.strokeDashoffset = String(RING * Math.min(1, Math.max(0, 1 - rem / run.totalMs)));
+  if (fg) { fg.setAttribute("stroke-dasharray", (RING * frac).toFixed(1) + " " + RING.toFixed(1)); fg.style.opacity = frac > 0.004 ? "1" : "0"; }
+  if (dot) dot.setAttribute("transform", "rotate(" + (frac * 360).toFixed(2) + " 150 150)");
   if (sub) sub.textContent = run.paused ? "Paused" : rem <= 0 ? "Time's up" : "";
   if (ring) ring.classList.toggle("up", rem <= 0 && !run.paused);
   if (rem <= 0 && !run.paused && !run.fired) {
@@ -439,7 +385,7 @@ function advance(kind) {
 function finishRun() {
   stopRunInfra();
   const done = run.res.filter((r) => r === "done").length, tot = run.steps.length, secs = Math.round((Date.now() - run.startedAt) / 1000);
-  state.log.unshift({id: uid(), rid: run.rid, name: run.name, color: run.color, at: Date.now(), secs, done, total: tot});
+  state.log.unshift({id: uid(), rid: run.rid, name: run.name, at: Date.now(), secs, done, total: tot});
   if (state.log.length > 1000) state.log.length = 1000;
   save();
   run.summary = {name: run.name, done, total: tot, secs};
@@ -448,11 +394,11 @@ function finishRun() {
 }
 
 /* ================= editor ================= */
-function openEditor(id) {
+function openEditor(id, from) {
   const r = id ? routineById(id) : null;
   draft = r
-    ? {id: r.id, isNew: false, name: r.name, color: r.color, days: r.days.slice(), open: -1, err: "", steps: r.steps.map((s) => ({id: s.id, name: s.name, secs: s.secs}))}
-    : {id: uid(), isNew: true, name: "", color: COLOR_KEYS[state.routines.length % COLOR_KEYS.length], days: [], open: -1, err: "", steps: [{id: uid(), name: "", secs: 0}]};
+    ? {id: r.id, isNew: false, from: from || "home", name: r.name, days: r.days.slice(), open: -1, err: "", steps: r.steps.map((s) => ({id: s.id, name: s.name, secs: s.secs}))}
+    : {id: uid(), isNew: true, from: "home", name: "", days: [], open: -1, err: "", steps: [{id: uid(), name: "", secs: 0}]};
   sheet = null; confirmKey = null; view = "edit";
   if (!r) pendingFocus = "rname";
   render();
@@ -461,7 +407,7 @@ function commitDraft() {
   const d = draft;
   const steps = d.steps.map((s) => ({id: s.id, name: s.name.trim(), secs: Math.max(0, s.secs | 0)})).filter((s) => s.name);
   if (!steps.length) return null;
-  return {id: d.id, name: d.name.trim() || "Untitled routine", color: d.color, days: d.days.slice().sort(), steps};
+  return {id: d.id, name: d.name.trim() || "Untitled routine", days: d.days.slice().sort(), steps};
 }
 function upsert(r) {
   const i = state.routines.findIndex((x) => x.id === r.id);
@@ -489,8 +435,9 @@ function act(a, ds) {
   switch (a) {
     case "tab": go(ds.t); break;
     case "new": openEditor(null); break;
-    case "edit": openEditor(ds.id); break;
-    case "open": openSheet({type: "detail", id: ds.id}); break;
+    case "edit": openEditor(ds.id, "detail"); break;
+    case "addTo": openEditor(ds.id, "detail"); draft.steps.push({id: uid(), name: "", secs: 0}); pendingFocus = "s" + (draft.steps.length - 1); render(); break;
+    case "open": openDetail(ds.id); break;
     case "start": { const r = routineById(ds.id); if (r && r.steps.length) beginRun(r); break; }
     case "resume": { const r = savedRun && routineById(savedRun.rid); if (r) beginRun(r, savedRun); break; }
     case "discardRun": savedRun = null; persistRunClear(); render(); break;
@@ -499,7 +446,6 @@ function act(a, ds) {
     case "hideInstall": state.settings.hideInstall = true; save(); render(); break;
     case "install": if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.finally(() => { deferredPrompt = null; render(); }); } break;
     case "tg": state.settings[ds.k] = !state.settings[ds.k]; save(); render(); break;
-    case "palette": state.settings.palette = ds.v; save(); applyPalette(); render(); break;
     case "theme": state.settings.theme = ds.v; save(); applyTheme(); render(); break;
     case "export": exportFile(); break;
     case "copy": {
@@ -514,12 +460,11 @@ function act(a, ds) {
       else { confirmKey = "clear"; render(); }
       break;
     /* editor */
-    case "cancel": draft = null; go("home"); break;
-    case "color": draft.color = ds.k; render(); break;
+    case "cancel": { const back = draft.from, id = draft.id; draft = null; if (back === "detail" && routineById(id)) openDetail(id); else go("home"); break; }
     case "day": { const k = draft.days.indexOf(i); if (k >= 0) draft.days.splice(k, 1); else draft.days.push(i); render(); break; }
     case "tpl": {
       const t = TEMPLATES[i];
-      draft.name = t.name; draft.color = t.color; draft.days = t.days.slice(); draft.open = -1;
+      draft.name = t.name; draft.days = t.days.slice(); draft.open = -1;
       draft.steps = t.steps.map(([name, secs]) => ({id: uid(), name, secs})); render(); break;
     }
     case "addStep": draft.steps.push({id: uid(), name: "", secs: 0}); draft.open = -1; pendingFocus = "s" + (draft.steps.length - 1); render(); break;
@@ -531,16 +476,19 @@ function act(a, ds) {
     case "save": {
       const r = commitDraft();
       if (!r) { draft.err = "Add at least one step with a name."; render(); break; }
-      upsert(r); save(); draft = null; go("home"); toast("Routine saved"); break;
+      const wasNew = draft.isNew;
+      upsert(r); save(); draft = null; toast("Routine saved");
+      if (wasNew) go("home"); else openDetail(r.id);
+      break;
     }
     case "dup": {
       const r = commitDraft(); if (!r) { draft.err = "Add at least one step with a name."; render(); break; }
       upsert(r);
-      state.routines.push({id: uid(), name: r.name + " copy", color: r.color, days: r.days.slice(), steps: r.steps.map((s) => ({id: uid(), name: s.name, secs: s.secs}))});
+      state.routines.push({id: uid(), name: r.name + " copy", days: r.days.slice(), steps: r.steps.map((s) => ({id: uid(), name: s.name, secs: s.secs}))});
       save(); draft = null; go("home"); toast("Routine duplicated"); break;
     }
     case "del":
-      if (confirmKey === "del") { state.routines = state.routines.filter((x) => x.id !== draft.id); save(); draft = null; go("home"); toast("Routine deleted"); }
+      if (confirmKey === "del") { state.routines = state.routines.filter((x) => x.id !== draft.id); save(); draft = null; detailId = null; go("home"); toast("Routine deleted"); }
       else { confirmKey = "del"; render(); }
       break;
     /* runner */
@@ -600,7 +548,7 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; if (view === "home" && !sheet) render(); });
 window.addEventListener("appinstalled", () => { deferredPrompt = null; if (!sheet) render(); });
-if (window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { applyPalette(); syncThemeColor(); });
+if (window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => syncThemeColor());
 
 /* ================= boot ================= */
 applyTheme();

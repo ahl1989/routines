@@ -1,12 +1,11 @@
 /* Offline support: cache the app shell, serve from cache first, refresh in the background. */
-const CACHE = "routines-v1";
+const CACHE = "routines-v2";
 const SHELL = [
   "./",
   "index.html",
   "css/app.css",
   "js/app.js",
   "manifest.webmanifest",
-  "fonts/display.woff2",
   "fonts/body.woff2",
   "icons/icon-192.png",
   "icons/icon-512.png",
