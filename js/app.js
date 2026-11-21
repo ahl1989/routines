@@ -77,6 +77,7 @@ function save() {
   state.updatedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
 }
+try { if (!localStorage.getItem(KEY)) save(); } catch (e) {}  /* keep the first-run example routines (and their ids) stable */
 
 let view = "home", lastView = "", sheet = null, sheetFresh = false, detailId = null;
 let draft = null, run = null, savedRun = null, timer = null, wake = null, audioCtx = null, deferredPrompt = null;
@@ -274,7 +275,7 @@ function runHtml() {
     <button class="cc big${allOn && !timed ? " pulse" : ""}" id="doneBtn" data-a="done"><span class="c">${ic("check")}</span>${last ? "Finish" : "Done"}</button>
     <button class="cc" data-a="skip"><span class="c">${ic("next")}</span>Skip</button></div>
     <p class="next">${last ? "Last step" : "Next: " + esc(run.steps[run.idx + 1].name)}</p></main>
-    <footer class="rfoot">${run.idx > 0 ? `<button class="back" data-a="back">Previous step</button>` : ""}<p id="finTxt"></p></footer></div>`;
+    <footer class="rfoot"><div class="acts">${run.idx > 0 ? `<button class="fbtn" data-a="back">${ic("back", "sm")}Previous step</button>` : ""}${last ? "" : `<button class="fbtn" data-a="later">Move to end${ic("end", "sm")}</button>`}</div><p id="finTxt"></p></footer></div>`;
 }
 function doneHtml() {
   const c = run.summary, s = streak();
@@ -348,7 +349,7 @@ function startStep(i) {
 function persistRun() {
   try {
     if (!run || view === "done") { localStorage.removeItem(RUNKEY); return; }
-    localStorage.setItem(RUNKEY, JSON.stringify({rid: run.rid, idx: run.idx, res: run.res, startedAt: run.startedAt, checks: run.checks, paused: run.paused, remainMs: run.remainMs, endAt: run.endAt, totalMs: run.totalMs}));
+    localStorage.setItem(RUNKEY, JSON.stringify({rid: run.rid, order: run.steps.map((x) => x.id), idx: run.idx, res: run.res, startedAt: run.startedAt, checks: run.checks, paused: run.paused, remainMs: run.remainMs, endAt: run.endAt, totalMs: run.totalMs}));
   } catch (e) {}
 }
 function loadSavedRun() {
@@ -371,6 +372,7 @@ function beginRun(r, resume) {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.resume) audioCtx.resume(); } catch (e) {}
   run = {rid: r.id, name: r.name, steps: r.steps.slice(), res: [], checks: {}, startedAt: Date.now(), paused: false, fired: false, remainMs: 0, endAt: 0, totalMs: 0};
   if (resume) {
+    if (Array.isArray(resume.order)) { const by = {}; run.steps.forEach((x) => { by[x.id] = x; }); const ord = resume.order.map((id) => by[id]).filter(Boolean); run.steps.forEach((x) => { if (!ord.includes(x)) ord.push(x); }); if (ord.length) run.steps = ord; }
     run.res = resume.res.slice(0, run.steps.length); run.startedAt = resume.startedAt; run.checks = resume.checks || {};
     const i = Math.min(resume.idx, run.steps.length - 1);
     if (run.steps[i].secs > 0 && resume.totalMs > 0) { run.idx = i; run.totalMs = resume.totalMs; run.paused = !!resume.paused; run.remainMs = resume.remainMs; run.endAt = resume.endAt; persistRun(); }
@@ -522,6 +524,7 @@ function act(a, ds) {
     case "chk": { const st = run.steps[run.idx], c = run.checks[st.id] = run.checks[st.id] || {}; c[ds.id] = !c[ds.id]; vib(10); persistRun(); render(); break; }
     case "done": vib(15); advance("done"); break;
     case "skip": advance("skip"); break;
+    case "later": if (run.idx < run.steps.length - 1) { const [m] = run.steps.splice(run.idx, 1); run.steps.push(m); run.res.length = run.idx; startStep(run.idx); render(); toast("Moved \u201c" + m.name + "\u201d to the end"); } break;
     case "back": if (run.idx > 0) { run.res[run.idx - 1] = undefined; startStep(run.idx - 1); render(); } break;
     case "pause":
       if (run.paused) { run.endAt = Date.now() + run.remainMs; run.paused = false; } else { run.remainMs = remaining(); run.paused = true; }

@@ -210,7 +210,8 @@ button:disabled{opacity:.35;cursor:default}
 .ci[aria-pressed="true"] .t{color:var(--muted);text-decoration:line-through}
 .next{font-size:15px;font-weight:600;color:var(--muted);overflow-wrap:anywhere}
 .rfoot{display:flex;flex-direction:column;align-items:center;padding:0 20px calc(16px + var(--sab));min-height:72px;justify-content:flex-end}
-.rfoot .back{min-height:44px;padding:0 16px;font-size:14px;font-weight:700;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px}
+.fbtn{min-height:44px;padding:0 16px;border-radius:99px;background:var(--card);font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:6px}
 .rfoot p{font-size:13.5px;font-weight:500;color:var(--muted);min-height:22px}
 @keyframes pulse{50%{transform:scale(1.06)}}
 @keyframes blink{50%{opacity:.4}}
