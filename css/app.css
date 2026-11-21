@@ -1,12 +1,12 @@
 /* Calm: white page, very light gray cards, slate text, one yellow accent.
    No borders or shadows. Dark circles are the main controls, yellow marks what to do next. */
-@font-face{font-family:"Figtree";src:url("../fonts/body.woff2") format("woff2");font-weight:300 900;font-display:swap}
+@font-face{font-family:"Nunito";src:url("../fonts/nunito.woff2") format("woff2");font-weight:200 1000;font-display:swap}
 
 :root{
   --bg:#ffffff; --card:#f6f6f8; --card-2:#ececf0; --ink:#2f3140; --muted:#5e6070; --line:#ececf0;
   --track:#e6e6ec; --accent:#ffd60a; --accent-ink:#2f3140; --ctl:#2f3140; --ctl-ink:#ffffff;
   --off:#8f91a1; --danger:#b42318; --scrim:rgba(47,49,64,.45);
-  --font:"Figtree","Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+  --font:"Nunito","Varela Round","Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
   --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
   color-scheme:light;
 }
@@ -27,7 +27,7 @@
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.4;-webkit-text-size-adjust:100%;overscroll-behavior-y:none}
 #app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column}
-h1,h2,h3{margin:0;letter-spacing:-.02em;line-height:1.1;text-wrap:balance}
+h1,h2,h3{margin:0;letter-spacing:-.01em;line-height:1.12;text-wrap:balance}
 p{margin:0}
 button,input,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0;padding:0;touch-action:manipulation}
