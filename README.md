@@ -8,3 +8,7 @@ A small offline-first app for building routines (steps with optional timers) and
 - Export and import backups from Settings.
 
 Plain HTML, CSS and JavaScript. No build step. The font (Nunito) is bundled under the SIL Open Font License.
+
+## Sync
+
+Settings → GitHub sync keeps `data.json` (routines, history, Fit-to-time memory) in a private repo you own, using a fine-grained token limited to that repo (Contents: read and write). The phone keeps a local copy and works offline.

@@ -96,9 +96,11 @@ function load() {
   return seed();
 }
 let state = load();
+let sync = null;  /* GitHub sync connection, set up at boot */
 function save() {
   state.updatedAt = Date.now();
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  if (sync && syncCore() !== sync.last) { sync.dirty = true; saveSync(); schedulePush(); }
 }
 try { if (!localStorage.getItem(KEY)) save(); } catch (e) {}  /* keep the first-run example routines (and their ids) stable */
 
@@ -429,7 +431,8 @@ function sheetHtml() {
     <p class="lbl" style="margin-top:4px">Appearance</p>
     <div class="seg" role="group" aria-label="Theme">${themes.map(([t, l]) => `<button data-a="theme" data-v="${t}" aria-pressed="${S.theme === t}">${l}</button>`).join("")}</div>
     ${sw("sound", "Sound", "Beep when a timer ends")}${sw("vibrate", "Vibration", "Buzz when a timer ends (Android)")}${sw("auto", "Auto-advance", "Move on when a timer ends")}${sw("wake", "Keep screen on", "While a routine is running")}
-    <p class="lbl">Your data<small>Routines are stored on this device only. Export a backup now and then, or to move to a new phone.</small></p>
+    ${syncHtml()}
+    <p class="lbl">Backup file<small>A copy you can keep anywhere. Sound and theme are not included in synced data.</small></p>
     <div class="grid2"><button class="btn" data-a="export">${ic("download", "sm")}Export</button><label class="btn" for="importFile" style="cursor:pointer">${ic("upload", "sm")}Import</label></div>
     <input type="file" id="importFile" accept="application/json,.json" class="sr">
     <details><summary>Copy or paste backup text</summary><div style="display:flex;flex-direction:column;gap:8px;padding-top:6px">
@@ -585,6 +588,149 @@ function importText(txt) {
   state = n; save(); applyTheme(); sheet = null; view = "home"; render(); toast("Backup restored"); return true;
 }
 
+/* ================= sync (GitHub) =================
+   Your routines, history and Fit-to-time memory are kept in data.json in a private repo you own.
+   The phone keeps a full local copy, so the app works offline and pushes when it can. */
+const SYNCKEY = "routines-sync-v1", SYNCFILE = "data.json";
+let pushT = 0, connMsg = "", connDraft = {repo: "", token: ""};
+const syncCore = () => JSON.stringify({routines: state.routines, log: state.log, fit: state.fit});
+function loadSync() {
+  try {
+    const o = JSON.parse(localStorage.getItem(SYNCKEY) || "null");
+    if (o && o.token && /^[\w.-]+\/[\w.-]+$/.test(o.repo || "")) return {token: o.token, repo: o.repo, sha: o.sha || "", dirty: !!o.dirty, at: +o.at || 0, pub: !!o.pub, err: "", busy: false, tried: 0, last: ""};
+  } catch (e) {}
+  return null;
+}
+function saveSync() {
+  try {
+    if (sync) localStorage.setItem(SYNCKEY, JSON.stringify({token: sync.token, repo: sync.repo, sha: sync.sha, dirty: sync.dirty, at: sync.at, pub: sync.pub}));
+    else localStorage.removeItem(SYNCKEY);
+  } catch (e) {}
+}
+const ago = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago"; };
+const defaultRepo = () => { const m = /^([\w-]+)\.github\.io$/i.exec(location.hostname); return (m ? m[1] : "your-name") + "/routines-data"; };
+const b64e = (s) => { const b = new TextEncoder().encode(s); let t = ""; for (let i = 0; i < b.length; i += 8192) t += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(t); };
+const b64d = (s) => { const t = atob(s.replace(/\s/g, "")); return new TextDecoder().decode(Uint8Array.from(t, (c) => c.charCodeAt(0))); };
+const ghHeaders = (extra) => Object.assign({Authorization: "Bearer " + sync.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}, extra || {});
+const ghErr = (status, msg) => { const e = new Error(msg || "GitHub error " + status); e.status = status; return e; };
+async function ghGet() {
+  const base = "https://api.github.com/repos/" + sync.repo;
+  let res = await fetch(base + "/contents/" + SYNCFILE, {headers: ghHeaders(), cache: "no-store"});
+  if (res.status === 404) {
+    const rp = await fetch(base, {headers: ghHeaders(), cache: "no-store"});
+    if (!rp.ok) throw ghErr(rp.status);
+    sync.pub = !(await rp.json()).private;
+    return {sha: "", data: null};
+  }
+  if (!res.ok) throw ghErr(res.status);
+  const j = await res.json();
+  let text;
+  if (j.encoding === "base64" && j.content) text = b64d(j.content);
+  else {
+    const raw = await fetch(base + "/contents/" + SYNCFILE, {headers: ghHeaders({Accept: "application/vnd.github.raw+json"}), cache: "no-store"});
+    if (!raw.ok) throw ghErr(raw.status); text = await raw.text();
+  }
+  let data = null; try { data = JSON.parse(text); } catch (e) {}
+  if (!data || !Array.isArray(data.routines)) throw ghErr(0, "data.json in that repo isn't a Routines file.");
+  return {sha: j.sha, data};
+}
+async function ghPut(sha, body) {
+  const res = await fetch("https://api.github.com/repos/" + sync.repo + "/contents/" + SYNCFILE, {
+    method: "PUT", headers: ghHeaders({"Content-Type": "application/json"}), cache: "no-store",
+    body: JSON.stringify({message: "Update routines " + new Date().toISOString().slice(0, 16).replace("T", " "), content: b64e(body), sha: sha || undefined})
+  });
+  if (res.status === 409 || res.status === 422) return {conflict: true};
+  if (!res.ok) throw ghErr(res.status);
+  return {sha: (await res.json()).content.sha};
+}
+function syncPayload() { return JSON.stringify({v: 2, updatedAt: state.updatedAt, routines: state.routines, log: state.log, fit: state.fit}, null, 1); }
+function adopt(d) {
+  const n = normalize(Object.assign({}, d, {settings: state.settings}));
+  if (!n) throw ghErr(0, "data.json in that repo isn't a Routines file.");
+  state = n; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  sync.last = syncCore(); sync.dirty = false;
+}
+/* Both sides changed: the newer copy wins for routines and Fit memory; history entries from both are kept. */
+function mergeIn(d) {
+  const n = normalize(Object.assign({}, d, {settings: state.settings}));
+  if (!n) throw ghErr(0, "data.json in that repo isn't a Routines file.");
+  const mine = new Set(state.log.map((l) => l.id)), theirs = new Set(n.log.map((l) => l.id));
+  const log = state.log.concat(n.log.filter((l) => !mine.has(l.id))).sort((a, b) => b.at - a.at);
+  if (n.updatedAt > state.updatedAt) { n.log = log; state = n; } else { state.log = log; }
+  void theirs;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+}
+function syncUi() { if (sheet && sheet.type === "settings" && sync) render(); }
+function schedulePush() { clearTimeout(pushT); pushT = setTimeout(() => syncNow(), 2500); }
+function syncMsg(e) {
+  if (e && e.status === 401) return "GitHub didn't accept that token. Check you copied all of it and that it hasn't expired.";
+  if (e && e.status === 403) return "That token isn't allowed to change this repo. It needs the Contents permission set to Read and write.";
+  if (e && e.status === 404) return "Can't find that repo. Check the name, and that the token includes it.";
+  if (e && e.status === 0) return e.message;
+  return "Can't reach GitHub right now. Your changes are kept and will be sent later.";
+}
+async function syncNow(o) {
+  o = o || {};
+  if (!sync || sync.busy) return;
+  if (!o.manual && !o.first && run && view === "run" && !sync.dirty) return;
+  sync.busy = true; sync.err = ""; sync.tried = Date.now(); syncUi();
+  let fatal = false;
+  try {
+    for (let n = 0; n < 3; n++) {
+      const rem = await ghGet();
+      if (rem.data && (o.first || rem.sha !== sync.sha)) {
+        if (o.first || !sync.dirty) adopt(rem.data); else { mergeIn(rem.data); sync.dirty = true; }
+        sync.sha = rem.sha; o.first = false;
+        if (!(run && view === "run")) render();
+      }
+      if (sync.dirty || !rem.data) {
+        const sent = syncCore(), res = await ghPut(rem.sha, syncPayload());
+        if (res.conflict) continue;
+        sync.sha = res.sha; sync.last = sent; sync.dirty = syncCore() !== sent;
+      }
+      sync.at = Date.now(); break;
+    }
+  } catch (e) {
+    sync.err = syncMsg(e); fatal = !!e && [0, 401, 403, 404].includes(e.status);
+  }
+  sync.busy = false;
+  if (o.firstTry && fatal) { connMsg = sync.err; sync = null; saveSync(); render(); return; }
+  saveSync(); syncUi();
+  if (sync.dirty && !sync.err) schedulePush();
+}
+function syncConnect() {
+  const repo = ((document.getElementById("syncRepo") || {}).value || "").trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\.git$/, "").replace(/\/$/, "");
+  const token = ((document.getElementById("syncToken") || {}).value || "").trim();
+  connDraft = {repo, token}; connMsg = "";
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { connMsg = "Enter the repo as owner/name, for example " + defaultRepo() + "."; render(); return; }
+  if (token.length < 20) { connMsg = "Paste the token you made on GitHub."; render(); return; }
+  sync = {token, repo, sha: "", dirty: false, at: 0, pub: false, err: "", busy: false, tried: 0, last: ""};
+  saveSync();
+  syncNow({first: true, firstTry: true, manual: true});
+}
+function syncDisconnect() { clearTimeout(pushT); sync = null; saveSync(); connDraft = {repo: "", token: ""}; connMsg = ""; render(); toast("Sync turned off. Your routines stay on this phone."); }
+function syncHtml() {
+  const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  if (sync) {
+    const st = sync.busy ? "Syncing…" : sync.err ? sync.err : sync.dirty ? "Waiting to send your latest changes." : "Up to date, " + ago(sync.at);
+    return `<p class="lbl">GitHub sync<small>${esc(sync.repo)}</small></p>
+      <p class="syncst${sync.err ? " bad" : ""}" role="status">${esc(st)}</p>
+      ${sync.pub ? `<p class="syncst bad">This repo is public, so anyone can read your routines. Make it private in the repo's settings.</p>` : ""}
+      <div class="grid2"><button class="btn" data-a="syncNow"${sync.busy ? " disabled" : ""}>Sync now</button><button class="btn" data-a="syncOff">Turn off</button></div>`;
+  }
+  return `<p class="lbl">GitHub sync<small>Keeps your routines in your own private repo, so a lost or new phone loses nothing.</small></p>
+    <input class="fld" id="syncRepo" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Data repo" placeholder="${esc(defaultRepo())}" value="${esc(connDraft.repo)}">
+    <input class="fld" id="syncToken" type="password" autocomplete="off" autocapitalize="off" aria-label="GitHub token" placeholder="Paste your token" value="${esc(connDraft.token)}">
+    ${connMsg ? `<p class="syncst bad" role="alert">${esc(connMsg)}</p>` : ""}
+    <button class="btn primary block" data-a="syncConnect">Connect</button>
+    <details><summary>How to get a token</summary><ol class="how">
+      <li>On github.com open <b>Settings → Developer settings → Personal access tokens → Fine-grained tokens</b>, then <b>Generate new token</b>.</li>
+      <li>Under <b>Repository access</b> choose <b>Only select repositories</b> and pick your private data repo.</li>
+      <li>Under <b>Permissions → Repository permissions</b> set <b>Contents</b> to <b>Read and write</b>.</li>
+      <li>Pick the longest expiry, generate, and paste the token above.</li></ol>
+      <p class="muted">If this repo already has routines in it, connecting loads them and replaces what is on this phone.</p></details>`;
+}
+
 /* ================= actions ================= */
 function act(a, ds) {
   if (!["del", "clearHistory"].includes(a)) confirmKey = null;
@@ -617,6 +763,9 @@ function act(a, ds) {
     case "install": if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.finally(() => { deferredPrompt = null; render(); }); } break;
     case "tg": state.settings[ds.k] = !state.settings[ds.k]; save(); render(); break;
     case "theme": state.settings.theme = ds.v; save(); applyTheme(); render(); break;
+    case "syncConnect": syncConnect(); break;
+    case "syncNow": syncNow({manual: true}); break;
+    case "syncOff": syncDisconnect(); break;
     case "export": exportFile(); break;
     case "copy": {
       const txt = JSON.stringify(state);
@@ -733,6 +882,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && sheet) c
 const refreshEta = () => document.querySelectorAll("[data-eta]").forEach((el) => { if (+el.dataset.eta > 0) el.textContent = etaText(+el.dataset.eta); });
 setInterval(refreshEta, 15000);
 document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && sync && Date.now() - sync.tried > 30000) syncNow();
   if (document.visibilityState === "visible") { refreshEta(); if (run && view === "run") { requestWake(); updateTimer(); } }
 });
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; if (view === "home" && !sheet) render(); });
@@ -743,6 +893,9 @@ if (window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListen
 applyTheme();
 loadSavedRun();
 render();
+window.addEventListener("online", () => { if (sync) syncNow(); });
+sync = loadSync();
+if (sync) { sync.last = sync.dirty ? "" : syncCore(); syncNow(); }
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
   window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });

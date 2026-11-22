@@ -296,3 +296,10 @@ textarea.paste{width:100%;min-height:90px;border-radius:18px;border:0;background
 .fsum{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:0 6px;font-size:14px;color:var(--muted)}
 .fsum b{font-size:17px;font-weight:800;color:var(--ink)}
 .fsum.over b{color:var(--danger)}
+
+.fld{width:100%;min-height:48px;border-radius:16px;border:0;background:var(--card);padding:0 14px;font-size:15px;margin-top:8px}
+.syncst{font-size:14px;margin:8px 4px 10px;color:var(--muted)}
+.syncst.bad{color:var(--danger)}
+.how{margin:4px 0 8px;padding-left:22px;font-size:14px;line-height:1.45;color:var(--ink)}
+.how li{margin-bottom:6px}
+.btn:disabled{opacity:.5}
