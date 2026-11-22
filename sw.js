@@ -1,5 +1,5 @@
 /* Offline support: cache the app shell, serve from cache first, refresh in the background. */
-const CACHE = "routines-v4";
+const CACHE = "routines-v5";
 const SHELL = [
   "./",
   "index.html",
